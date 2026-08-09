@@ -1,0 +1,995 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; worker-src 'self'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:;" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grok Build</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app" id="app">
+    <!-- Codex-style title bar: menus + layout toggles (window controls = OS overlay) -->
+    <header class="titlebar" id="titlebar">
+      <nav class="titlebar-menus" aria-label="Application menu">
+        <button type="button" class="titlebar-menu-btn" data-menu="File">File</button>
+        <button type="button" class="titlebar-menu-btn" data-menu="Edit">Edit</button>
+        <button type="button" class="titlebar-menu-btn" data-menu="View">View</button>
+        <button type="button" class="titlebar-menu-btn" data-menu="Agent">Agent</button>
+        <button type="button" class="titlebar-menu-btn" data-menu="Help">Help</button>
+      </nav>
+      <div class="titlebar-drag" aria-hidden="true"></div>
+      <div class="titlebar-actions" role="toolbar" aria-label="Layout">
+        <button type="button" class="titlebar-icon-btn" id="btnToggleSidebar" title="Left sidebar" aria-pressed="true" aria-label="Toggle left sidebar">
+          <span data-icon="panelLeft" data-icon-size="16"></span>
+        </button>
+        <button type="button" class="titlebar-icon-btn" id="btnTogglePanel" title="Right panel (Ctrl+P)" aria-pressed="true" aria-label="Toggle right panel">
+          <span data-icon="panelRight" data-icon-size="16"></span>
+        </button>
+        <button type="button" class="titlebar-icon-btn" id="btnToggleTerm" title="Terminal (Ctrl+T)" aria-pressed="false" aria-label="Toggle terminal">
+          <span data-icon="panelBottom" data-icon-size="16"></span>
+        </button>
+      </div>
+    </header>
+
+    <div class="app-body" id="appBody">
+    <aside class="col sidebar" id="colSidebar" style="width: 248px">
+      <button id="btnNew" class="side-btn primary" type="button"><span class="ico" data-icon="plus"></span> <span data-i18n="newConversation">New conversation</span></button>
+      <button id="btnHistory" class="side-btn" type="button"><span class="ico" data-icon="history"></span> <span data-i18n="conversationHistory">Conversation history</span></button>
+      <button id="btnTools" class="side-btn" type="button" data-i18n-title="tools" title="Tools"><span class="ico" data-icon="menu"></span> <span data-i18n="tools">Tools</span></button>
+
+      <!-- Projects + Recents flow by content height (scroll together); profile stays bottom -->
+      <div class="sidebar-scroll" id="sidebarScroll">
+        <div class="side-section projects-section">
+          <div class="side-section-head">
+            <span data-i18n="projects">Projects</span>
+            <button id="btnWorkspace" class="icon-only" type="button" data-i18n-title="openFolder" title="Open project" aria-label="Open project">
+              <span data-icon="plus" data-icon-size="14"></span>
+            </button>
+          </div>
+          <div id="projectList" class="project-list" role="tree"></div>
+        </div>
+
+        <div class="side-section recents-section">
+          <div class="side-section-head">
+            <span data-i18n="recentChats">Recents</span>
+          </div>
+          <div id="recentsList" class="recents-list"></div>
+        </div>
+      </div>
+
+      <div class="sidebar-bottom">
+        <div class="profile-wrap" id="profileWrap">
+          <button type="button" class="profile-btn" id="btnProfile" aria-haspopup="menu" aria-expanded="false">
+            <span class="profile-avatar" id="profileAvatar" aria-hidden="true">G</span>
+            <span class="profile-meta">
+              <span class="profile-name" id="profileName" data-i18n="login">Login</span>
+              <span class="profile-sub" id="profileSub" data-i18n="signInToGrok">Sign in to Grok</span>
+            </span>
+            <span class="profile-caret" id="profileCaret" data-icon="chevronDown" data-icon-size="12" aria-hidden="true"></span>
+          </button>
+          <div class="profile-menu hidden" id="profileMenu" role="menu">
+            <div class="profile-menu-email" id="menuEmail" role="menuitem" title="Account email">—</div>
+            <button type="button" class="profile-menu-item" id="menuSettings" role="menuitem" data-i18n="settings">Settings</button>
+            <button type="button" class="profile-menu-item danger" id="menuLogout" role="menuitem" data-i18n="logout">Logout</button>
+          </div>
+        </div>
+        <p id="updateBanner" class="update-banner hidden"></p>
+      </div>
+    </aside>
+
+    <div class="splitter" id="split1" data-key="sidebarWidth"></div>
+
+    <!-- Codex-like main: chat + optional right tools, terminal docked bottom -->
+    <div class="main-stack" id="mainStack">
+      <div class="work-row" id="workRow">
+        <section class="col conversation" id="colConv">
+          <header class="conv-header">
+            <div class="conv-title-wrap">
+              <h1 id="convTitle" class="conv-title">New conversation</h1>
+              <p id="workspaceLabel" class="conv-sub" data-i18n="noProject">No project</p>
+              <div id="gitStrip" class="git-strip hidden" title="Git status">
+                <span class="git-branch" id="gitBranch">—</span>
+                <span class="git-hash hidden" id="gitHash"></span>
+                <span class="git-dirty hidden" id="gitDirty"></span>
+                <span class="git-sync hidden" id="gitSync"></span>
+                <a class="git-pr hidden" id="gitPr" href="#" target="_blank" rel="noreferrer"></a>
+                <button type="button" class="git-pr-create hidden" id="gitPrCreate" title="Open create PR in browser">Create PR</button>
+              </div>
+            </div>
+            <div class="conv-actions">
+              <div id="usageChip" class="status-chip usage hidden" title="Session context">
+                <div class="status-usage-bar-wrap" aria-hidden="true"><div class="status-usage-bar" id="statusUsageBar"></div></div>
+                <span class="status-text" id="usageText">—</span>
+              </div>
+              <div id="status" class="status-chip" data-state="disconnected">
+                <span class="dot"></span><span class="status-text" data-i18n="disconnected">Disconnected</span>
+              </div>
+              <button id="btnCmdK" class="hdr-toggle" type="button" title="Commands (Ctrl+K)">⌘K</button>
+              <button id="btnOpenIde" class="open-ide-btn" type="button" data-i18n="openIde" data-i18n-title="openIdeTitle" title="Open Grok Build IDE">Open IDE</button>
+              <div class="hdr-toggles" role="group" aria-label="Theme and language">
+                <button type="button" class="hdr-icon-btn hdr-icon-round" id="btnTheme" data-i18n-title="theme" title="Theme" aria-label="Theme">
+                  <span data-icon="moon" id="themeIcon"></span>
+                </button>
+                <button type="button" class="hdr-icon-btn hdr-icon-round" id="btnLang" data-i18n-title="switchLang" title="Language" aria-label="Language">
+                  <span class="lang-badge" id="langBadge">EN</span>
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <div id="sessionTabs" class="session-tabs" aria-label="Sessions"></div>
+          <div id="agentSlots" class="agent-slots hidden" aria-label="Agent slots"></div>
+          <div id="planDock" class="plan-dock hidden"></div>
+          <div id="messages" class="timeline" aria-live="polite"></div>
+
+          <footer class="composer-wrap">
+            <div id="queueBar" class="queue-bar hidden">
+              <span id="queueText">0 queued</span>
+              <button id="btnQueueClear" class="pill-btn" type="button">Clear queue</button>
+            </div>
+            <div id="attachBar" class="attach-bar hidden"></div>
+            <div id="mentionMenu" class="mention-menu hidden" role="listbox" aria-label="File mentions"></div>
+            <div id="slashMenu" class="slash-menu hidden" role="listbox" aria-label="Slash commands"></div>
+            <div class="composer">
+              <textarea id="prompt" rows="3" data-i18n-placeholder="messagePlaceholder" placeholder="Message… /imagine · @file · Enter to send" spellcheck="true" autocomplete="off"></textarea>
+              <div class="composer-toolbar">
+                <div class="composer-left">
+                  <button id="btnAttach" class="ghost-icon" type="button" data-i18n-title="attach" data-i18n-aria="attach" title="Attach files" aria-label="Attach">
+                    <span data-icon="paperclip" data-icon-size="18"></span>
+                  </button>
+                  <div class="chip-dd" id="ddProject">
+                    <button type="button" class="chip-btn chip-project" id="btnProject" aria-haspopup="listbox" aria-expanded="false" title="Project">
+                      <span class="chip-ico" data-icon="folder" data-icon-size="14" aria-hidden="true"></span>
+                      <span class="chip-label" id="projectChipLabel" data-i18n="noProject">No project</span>
+                      <span class="chip-caret" data-icon="caret" data-icon-size="12" aria-hidden="true"></span>
+                    </button>
+                    <div class="chip-menu hidden" id="menuProject" role="listbox" aria-label="Projects"></div>
+                  </div>
+                  <div class="chip-dd" id="ddPermission">
+                    <button type="button" class="chip-btn chip-perm" id="btnPermission" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="chip-ico" id="permIco" data-icon="circleDot" data-icon-size="14" aria-hidden="true"></span>
+                      <span class="chip-label" id="permLabel">Default</span>
+                      <span class="chip-caret" data-icon="caret" data-icon-size="12" aria-hidden="true"></span>
+                    </button>
+                    <div class="chip-menu hidden" id="menuPermission" role="listbox">
+                      <button type="button" role="option" data-value="default" data-icon-name="circleDot">Default</button>
+                      <button type="button" role="option" data-value="acceptEdits" data-icon-name="edit">Auto · accept edits</button>
+                      <button type="button" role="option" data-value="auto" data-icon-name="zap">Auto</button>
+                      <button type="button" role="option" data-value="plan" data-icon-name="plan">Plan</button>
+                      <button type="button" role="option" data-value="dontAsk" data-icon-name="circle">Don't ask</button>
+                      <button type="button" role="option" data-value="bypassPermissions" data-icon-name="shield">Full access</button>
+                    </div>
+                    <select id="selPermission" class="sr-only" tabindex="-1" aria-hidden="true">
+                      <option value="default" selected>Default</option>
+                      <option value="acceptEdits">Auto · accept edits</option>
+                      <option value="auto">Auto</option>
+                      <option value="plan">Plan</option>
+                      <option value="dontAsk">Don't ask</option>
+                      <option value="bypassPermissions">Full access</option>
+                    </select>
+                  </div>
+                  <div class="chip-dd" id="ddModel">
+                    <button type="button" class="chip-btn chip-model" id="btnModel" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="chip-ico model-spark" data-icon="spark" data-icon-size="14" aria-hidden="true"></span>
+                      <span class="chip-label" id="modelLabel">Model</span>
+                      <span class="chip-caret" data-icon="caret" data-icon-size="12" aria-hidden="true"></span>
+                    </button>
+                    <div class="chip-menu hidden" id="menuModel" role="listbox">
+                      <div id="menuModelOpts"></div>
+                    </div>
+                    <select id="selModel" class="sr-only" tabindex="-1" aria-hidden="true">
+                      <option value="grok-4.5" selected>grok-4.5 (default)</option>
+                    </select>
+                  </div>
+                  <div class="chip-dd" id="ddEffort">
+                    <button type="button" class="chip-btn chip-effort" id="btnEffort" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="chip-ico" data-icon="effort" data-icon-size="14" aria-hidden="true"></span>
+                      <span class="chip-label" id="effortLabel">Effort</span>
+                      <span class="chip-caret" data-icon="caret" data-icon-size="12" aria-hidden="true"></span>
+                    </button>
+                    <div class="chip-menu hidden" id="menuEffort" role="listbox">
+                      <div id="menuEffortOpts"></div>
+                    </div>
+                    <select id="selEffort" class="sr-only" tabindex="-1" aria-hidden="true">
+                      <option value="">System default</option>
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="xhigh">xHigh</option>
+                    </select>
+                  </div>
+                  <div class="chip-dd hidden" id="ctlMode">
+                    <button type="button" class="chip-btn" id="btnMode" aria-haspopup="listbox" aria-expanded="false">
+                      <span class="chip-label" id="modeLabel">Mode</span>
+                      <span class="chip-caret" data-icon="caret" data-icon-size="12" aria-hidden="true"></span>
+                    </button>
+                    <div class="chip-menu hidden" id="menuMode" role="listbox"></div>
+                    <select id="selMode" class="sr-only" tabindex="-1" aria-hidden="true">
+                      <option value="">Mode</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="composer-right">
+                  <button id="btnVoice" class="ghost-icon voice-btn" type="button" data-i18n-title="voiceInput" data-i18n-aria="voiceInput" title="Voice input" aria-label="Voice input" aria-pressed="false">
+                    <span data-icon="mic" data-icon-size="18"></span>
+                  </button>
+                  <button id="btnSend" class="send-btn" type="button" data-i18n-title="send" data-i18n-aria="send" title="Send" aria-label="Send">
+                    <span data-icon="send" data-icon-size="16"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </footer>
+        </section>
+
+        <div class="splitter" id="split2" data-key="editorWidth" data-reverse="1"></div>
+
+        <aside class="col editor-pane" id="colEditor" style="width: 360px">
+          <div class="editor-tabs">
+            <button class="rtab active" data-panel="files" type="button" data-i18n="files">Files</button>
+            <button class="rtab" data-panel="review" type="button" data-i18n="review">Review</button>
+            <button class="rtab" data-panel="manager" type="button" data-i18n="mgrTab" data-i18n-title="mgrTabTitle" title="Background tasks">Tasks</button>
+            <button class="rtab" data-panel="artifacts" type="button" data-i18n="artTab" data-i18n-title="artTabTitle" title="Saved results">Results</button>
+            <button class="rtab" data-panel="tools" type="button" data-i18n="cli" data-i18n-title="toolsPanelTitle" title="Extensions">Extensions</button>
+            <button id="btnClosePanel" class="tab-x panel-close" type="button" data-i18n-title="hidePanel" title="Hide panel"><span data-icon="close" data-icon-size="12"></span></button>
+          </div>
+          <div id="panelFiles" class="rpanel">
+            <div class="panel-intro">
+              <div>
+                <h3 class="tools-title" data-i18n="filesTitle">Project files</h3>
+                <p class="tools-lead" data-i18n="filesLead">Browse and preview files in the open project. No setup needed.</p>
+              </div>
+              <button type="button" class="help-btn" data-help="files" data-i18n-title="help" data-i18n-aria="help" title="Help" aria-label="Help">?</button>
+            </div>
+            <div class="editor-path" id="filesRoot">—</div>
+            <div id="fileTree" class="file-tree"></div>
+            <div class="editor-path" id="editorPath" data-i18n="selectFile">Select a file</div>
+            <pre id="editorBody" class="editor-body"><code data-i18n="filePreview">// File preview</code></pre>
+          </div>
+          <div id="panelReview" class="rpanel hidden">
+            <div class="panel-intro">
+              <div>
+                <h3 class="tools-title" data-i18n="reviewTitle">Review edits</h3>
+                <p class="tools-lead" data-i18n="reviewLead">When the agent changes files, diffs show here so you can accept or reject them.</p>
+              </div>
+              <button type="button" class="help-btn" data-help="review" data-i18n-title="help" data-i18n-aria="help" title="Help" aria-label="Help">?</button>
+            </div>
+            <div id="reviewList" class="review-list">
+              <p class="muted-pad" data-i18n="agentEdits">Agent edits appear here with Review.</p>
+            </div>
+            <div id="diffToolbar" class="diff-toolbar hidden">
+              <span id="diffPathLabel" class="diff-path truncate">—</span>
+              <span id="diffStats" class="diff-stats muted"></span>
+              <div class="diff-toolbar-actions">
+                <button type="button" class="pill-btn" id="btnDiffSide" data-i18n="diffSide" title="Toggle side-by-side">Side</button>
+                <button type="button" class="pill-btn accent" id="btnDiffAccept" data-i18n="accept" title="Accept all hunks">Accept all</button>
+                <button type="button" class="pill-btn" id="btnDiffReject" data-i18n="reject" title="Reject all hunks">Reject all</button>
+              </div>
+            </div>
+            <div id="hunkList" class="hunk-list hidden" aria-label="Diff hunks"></div>
+            <div id="diffView" class="diff-view">
+              <pre id="diffBody" class="editor-body diff-body"><code data-i18n="diffPreview">// Diff preview</code></pre>
+              <div id="diffSide" class="diff-side hidden">
+                <pre class="editor-body diff-pane"><code id="diffOld"></code></pre>
+                <pre class="editor-body diff-pane"><code id="diffNew"></code></pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- Background tasks (Manager) -->
+          <div id="panelManager" class="rpanel hidden">
+            <div class="tools-head panel-intro">
+              <div>
+                <h3 class="tools-title" data-i18n="mgrTitle">Background tasks</h3>
+                <p class="tools-lead" data-i18n="mgrLead">Run a job in the background while you keep chatting. Optional — most work only needs the chat.</p>
+              </div>
+              <button type="button" class="help-btn" data-help="manager" data-i18n-title="help" data-i18n-aria="help" title="Help" aria-label="Help">?</button>
+            </div>
+
+            <nav class="tools-subnav" id="mgrSubnav" aria-label="Task sections">
+              <button type="button" class="tools-subtab active" data-mgr-tab="new" data-i18n="mgrNew">New task</button>
+              <button type="button" class="tools-subtab" data-mgr-tab="board" data-i18n="mgrBoard">Board</button>
+              <button type="button" class="tools-subtab" data-mgr-tab="inbox">
+                <span data-i18n="mgrInbox">Inbox</span>
+                <span class="tab-badge muted" id="inboxBadge"></span>
+              </button>
+              <button type="button" class="tools-subtab" data-mgr-tab="worktrees" data-i18n="mgrWorktrees">Worktrees</button>
+            </nav>
+
+            <div class="tools-scroll">
+              <!-- New task -->
+              <section class="tools-section active" data-mgr-section="new">
+                <div class="tools-section-head">
+                  <div>
+                    <h4 data-i18n="mgrNewTitle">Describe the task</h4>
+                    <p class="field-hint" data-i18n="mgrNewHint">Write what you want done. Needs an open project folder.</p>
+                  </div>
+                  <button type="button" class="help-btn" data-help="manager-new" data-i18n-title="help" title="Help" aria-label="Help">?</button>
+                </div>
+                <label class="field"><span data-i18n="mgrPrompt">Task</span>
+                  <textarea id="jobPrompt" class="mgr-prompt" rows="3" data-i18n-placeholder="mgrPromptPh" placeholder="e.g. Fix failing tests in packages/acp-client and summarize the diff…"></textarea>
+                </label>
+                <label class="field"><span data-i18n="mgrJobTitle">Title (optional)</span>
+                  <input id="jobTitle" type="text" data-i18n-placeholder="mgrJobTitlePh" placeholder="Short label for the board" autocomplete="off" />
+                </label>
+                <div class="tools-actions">
+                  <button type="button" class="pill-btn accent" id="btnJobRun" data-i18n="mgrQueue">Queue task</button>
+                </div>
+
+                <details class="adv-details" id="mgrAdvDetails">
+                  <summary data-i18n="mgrAdvanced">Advanced options (optional)</summary>
+                  <p class="field-hint" data-i18n="mgrAdvancedHint">Leave empty for defaults. Worktree isolates edits; permission controls how the job handles tool prompts.</p>
+                  <label class="field"><span data-i18n="worktreeName">Worktree name</span>
+                    <input id="jobWorktree" type="text" data-i18n-placeholder="worktreeNamePh" placeholder="e.g. feat-ui" autocomplete="off" />
+                  </label>
+                  <label class="field"><span data-i18n="worktreeRef">Base branch / commit</span>
+                    <input id="jobWorktreeRef" type="text" data-i18n-placeholder="worktreeRefPh" placeholder="Optional — defaults to current HEAD" autocomplete="off" />
+                  </label>
+                  <label class="field"><span data-i18n="mgrPerm">Permission mode</span>
+                    <select id="jobPerm">
+                      <option value="auto" data-i18n="permAuto">Auto (recommended)</option>
+                      <option value="acceptEdits" data-i18n="permAccept">Accept edits</option>
+                      <option value="dontAsk" data-i18n="permDontAsk">Don't ask</option>
+                      <option value="plan" data-i18n="permPlan">Plan only</option>
+                      <option value="default" data-i18n="permDefault">Default</option>
+                      <option value="bypassPermissions" data-i18n="permBypass">Bypass (careful)</option>
+                    </select>
+                  </label>
+                </details>
+                <div class="panel-empty-note" data-i18n="mgrDefaultNote">Default: leave advanced empty. Queue → watch Board → open result from Inbox.</div>
+              </section>
+
+              <!-- Board -->
+              <section class="tools-section" data-mgr-section="board">
+                <div class="tools-section-head">
+                  <div>
+                    <h4 data-i18n="mgrBoardTitle">Task board</h4>
+                    <p class="field-hint" data-i18n="mgrBoardHint">Queued and running jobs. Cancel if needed; view output when done.</p>
+                  </div>
+                </div>
+                <div class="tools-actions">
+                  <button type="button" class="pill-btn" id="btnJobsRefresh" data-i18n="refresh">Refresh</button>
+                  <button type="button" class="pill-btn" id="btnJobsClear" data-i18n="mgrClearDone">Clear finished</button>
+                </div>
+                <div id="jobBoard" class="mgr-list mgr-list-tall"><p class="muted-pad" data-i18n="mgrNoTasks">No tasks yet. Create one under New task.</p></div>
+              </section>
+
+              <!-- Inbox -->
+              <section class="tools-section" data-mgr-section="inbox">
+                <div class="tools-section-head">
+                  <div>
+                    <h4 data-i18n="mgrInboxTitle">Inbox</h4>
+                    <p class="field-hint" data-i18n="mgrInboxHint">Finished jobs land here. Click one to open its output in Results.</p>
+                  </div>
+                </div>
+                <div id="inboxList" class="mgr-list mgr-list-tall"><p class="muted-pad" data-i18n="mgrInboxEmpty">Completed jobs appear here.</p></div>
+              </section>
+
+              <!-- Worktrees -->
+              <section class="tools-section" data-mgr-section="worktrees">
+                <div class="tools-section-head">
+                  <div>
+                    <h4 data-i18n="mgrWtTitle">Git worktrees</h4>
+                    <p class="field-hint" data-i18n="mgrWtHint">Isolation folders used by background jobs. Optional for basic use.</p>
+                  </div>
+                  <button type="button" class="help-btn" data-help="manager-worktree" data-i18n-title="help" title="Help" aria-label="Help">?</button>
+                </div>
+                <div class="tools-actions">
+                  <button type="button" class="pill-btn accent" id="btnWtRefresh" data-i18n="refresh">Refresh</button>
+                  <button type="button" class="pill-btn" id="btnMgrOpenToolsWt" data-i18n="mgrOpenToolsWt">CLI worktrees</button>
+                </div>
+                <div id="wtBoard" class="mgr-list"><p class="muted-pad" data-i18n="mgrWtEmpty">No tracked worktrees yet.</p></div>
+                <div class="settings-group tools-group">
+                  <div class="settings-group-title" data-i18n="mcpManage">Manage existing</div>
+                  <label class="field"><span data-i18n="worktreeName">Worktree name</span>
+                    <input id="mgrWtName" type="text" data-i18n-placeholder="mgrWtIdPh" placeholder="Click a card above or type an id" autocomplete="off" />
+                  </label>
+                  <div class="tools-actions">
+                    <button type="button" class="pill-btn" id="btnMgrWtShow" data-i18n="showDetails">Show details</button>
+                    <button type="button" class="pill-btn" id="btnMgrWtRm" data-i18n="remove">Remove</button>
+                    <button type="button" class="pill-btn" id="btnMgrWtGc" data-i18n="mgrWtGc" title="Clean orphaned worktrees">Cleanup</button>
+                  </div>
+                </div>
+                <div class="panel-empty-note" data-i18n="mgrWtNote">To create: set a worktree name under New task → Advanced, then Queue — or Settings → Agent → Isolation + Connect.</div>
+              </section>
+            </div>
+          </div>
+
+          <!-- Saved results (Artifacts) -->
+          <div id="panelArtifacts" class="rpanel hidden">
+            <div class="tools-head panel-intro">
+              <div>
+                <h3 class="tools-title" data-i18n="artTitle">Saved results</h3>
+                <p class="tools-lead" data-i18n="artLead">Plans and job outputs you keep for later. Nothing to configure — items appear when you save or finish a task.</p>
+              </div>
+              <button type="button" class="help-btn" data-help="artifacts" data-i18n-title="help" data-i18n-aria="help" title="Help" aria-label="Help">?</button>
+            </div>
+            <div class="art-toolbar">
+              <button type="button" class="pill-btn accent" id="btnArtSavePlan" data-i18n="artSavePlan">Save plan from chat</button>
+              <button type="button" class="pill-btn" id="btnArtRefresh" data-i18n="refresh">Refresh</button>
+              <button type="button" class="pill-btn" id="btnArtClear" data-i18n="artClear">Clear all</button>
+            </div>
+            <div class="tools-scroll art-scroll">
+              <div id="artifactList" class="mgr-list art-list">
+                <div class="panel-empty-card" id="artEmpty">
+                  <p class="panel-empty-title" data-i18n="artEmptyTitle">No saved items yet</p>
+                  <ul>
+                    <li data-i18n="artEmpty1">When a background task finishes, open it from Tasks → Inbox</li>
+                    <li data-i18n="artEmpty2">Or click “Save plan from chat” if a plan is visible</li>
+                  </ul>
+                </div>
+              </div>
+              <div id="artifactDetail" class="art-detail hidden">
+                <div class="mgr-head">
+                  <strong id="artDetailTitle">—</strong>
+                  <button type="button" class="mini" id="btnArtOpenIde" data-i18n="openIde">Open in IDE</button>
+                </div>
+                <pre id="artDetailBody" class="editor-body art-body"><code></code></pre>
+              </div>
+            </div>
+          </div>
+
+          <div id="panelTools" class="rpanel hidden">
+            <div class="tools-head">
+              <div>
+                <h3 class="tools-title" data-i18n="toolsPanelTitle">Extensions</h3>
+                <p class="tools-lead" data-i18n="toolsPanelLead">Health checks and optional add-ons for the agent. Defaults work without changes.</p>
+              </div>
+            </div>
+
+            <nav class="tools-subnav" id="toolsSubnav" aria-label="Tools sections">
+              <button type="button" class="tools-subtab active" data-tools-tab="health" data-i18n="toolsHealth">Health</button>
+              <button type="button" class="tools-subtab" data-tools-tab="mcp" data-i18n="toolsMcp">MCP</button>
+              <button type="button" class="tools-subtab" data-tools-tab="plugins" data-i18n="toolsPlugins">Plugins</button>
+              <button type="button" class="tools-subtab" data-tools-tab="marketplace" data-i18n="toolsMarketplace">Marketplace</button>
+              <button type="button" class="tools-subtab" data-tools-tab="worktree" data-i18n="toolsWorktree">Worktrees</button>
+            </nav>
+
+            <div class="tools-scroll">
+              <!-- Health -->
+              <section class="tools-section active" data-tools-section="health">
+                <div class="tools-section-head">
+                  <div>
+                    <h4 data-i18n="toolsHealthTitle">CLI health</h4>
+                    <p class="field-hint" data-i18n="toolsHealthHint">Quick checks that the Grok CLI and your login are OK.</p>
+                  </div>
+                  <button type="button" class="help-btn" data-help="health" data-i18n-title="help" data-i18n-aria="help" title="Help" aria-label="Help">?</button>
+                </div>
+                <div class="tools-actions">
+                  <button class="pill-btn accent" data-cli="doctor" type="button" data-i18n="runDoctor">Run doctor</button>
+                  <button class="pill-btn" data-cli="--version" type="button" data-i18n="showVersion">Show version</button>
+                </div>
+              </section>
+
+              <!-- MCP -->
+              <section class="tools-section" data-tools-section="mcp">
+                <div class="tools-section-head">
+                  <div>
+                    <h4 data-i18n="toolsMcpTitle">MCP servers</h4>
+                    <p class="field-hint" data-i18n="toolsMcpHint">Add external tools the agent can call (GitHub, browsers, APIs…).</p>
+                  </div>
+                  <button type="button" class="help-btn" data-help="mcp" data-i18n-title="help" data-i18n-aria="help" title="Help" aria-label="Help">?</button>
+                </div>
+                <div class="tools-actions">
+                  <button class="pill-btn accent" data-cli="mcp list" type="button" data-i18n="listServers">List servers</button>
+                </div>
+                <div class="settings-group tools-group">
+                  <div class="settings-group-title" data-i18n="mcpPresets">Quick add (recommended)</div>
+                  <div class="tool-presets" id="mcpPresets"></div>
+                  <p class="field-hint" data-i18n="mcpPresetsHint">Fills the form below — review, then Add.</p>
+                </div>
+                <div class="settings-group tools-group">
+                  <div class="settings-group-title" data-i18n="mcpLocal">Local command (stdio)</div>
+                  <label class="field"><span data-i18n="mcpName">Name</span>
+                    <input id="mcpName" type="text" data-i18n-placeholder="mcpNamePh" placeholder="e.g. github" autocomplete="off" />
+                  </label>
+                  <label class="field"><span data-i18n="mcpCommand">Command</span>
+                    <input id="mcpCmd" type="text" data-i18n-placeholder="mcpCmdPh" placeholder="npx -y @modelcontextprotocol/server-github" autocomplete="off" />
+                  </label>
+                  <button id="btnMcpAdd" class="pill-btn accent" type="button" data-i18n="mcpAddLocal">Add local server</button>
+                </div>
+                <div class="settings-group tools-group">
+                  <div class="settings-group-title" data-i18n="mcpRemote">Remote URL (HTTP / SSE)</div>
+                  <label class="field"><span data-i18n="mcpName">Name</span>
+                    <input id="mcpHttpName" type="text" data-i18n-placeholder="mcpNamePh" placeholder="e.g. remote-api" autocomplete="off" />
+                  </label>
+                  <label class="field"><span data-i18n="mcpUrl">URL</span>
+                    <input id="mcpHttpUrl" type="text" data-i18n-placeholder="mcpUrlPh" placeholder="https://…" autocomplete="off" />
+                  </label>
+                  <label class="field"><span data-i18n="mcpTransport">Transport</span>
+                    <select id="mcpHttpKind">
+                      <option value="http">HTTP</option>
+                      <option value="sse">SSE</option>
+                    </select>
+                  </label>
+                  <button id="btnMcpHttpAdd" class="pill-btn accent" type="button" data-i18n="mcpAddRemote">Add remote server</button>
+                </div>
+                <div class="settings-group tools-group">
+                  <div class="settings-group-title" data-i18n="mcpManage">Manage existing</div>
+                  <label class="field"><span data-i18n="mcpServerName">Server name</span>
+                    <input id="mcpRmName" type="text" data-i18n-placeholder="mcpServerNamePh" placeholder="Name from List servers" autocomplete="off" />
+                  </label>
+                  <div class="tools-actions">
+                    <button id="btnMcpEn" class="pill-btn" type="button" data-i18n="enable">Enable</button>
+                    <button id="btnMcpDis" class="pill-btn" type="button" data-i18n="disable">Disable</button>
+                    <button id="btnMcpRm" class="pill-btn" type="button" data-i18n="remove">Remove</button>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Plugins (installed) -->
+              <section class="tools-section" data-tools-section="plugins">
+                <div class="tools-section-head">
+                  <div>
+                    <h4 data-i18n="toolsPluginsTitle">Plugins</h4>
+                    <p class="field-hint" data-i18n="toolsPluginsHint">Install optional skill packs for the agent (from git or local path). Browse catalogs under Marketplace.</p>
+                  </div>
+                  <button type="button" class="help-btn" data-help="plugins" data-i18n-title="help" data-i18n-aria="help" title="Help" aria-label="Help">?</button>
+                </div>
+                <div class="tools-actions">
+                  <button class="pill-btn accent" data-cli="plugin list" type="button" data-i18n="listPlugins">List installed</button>
+                  <button class="pill-btn" id="btnPluginUpdateAll" type="button" data-i18n="pluginUpdateAll">Update all</button>
+                  <button class="pill-btn" id="btnOpenMarketplaceTab" type="button" data-i18n="toolsMarketplace">Marketplace</button>
+                </div>
+                <div class="settings-group tools-group">
+                  <label class="field"><span data-i18n="pluginSource">Source or name</span>
+                    <input id="pluginName" type="text" data-i18n-placeholder="pluginSourcePh" placeholder="user/repo, git URL, local path, or installed name" autocomplete="off" />
+                  </label>
+                  <div class="tools-actions">
+                    <button id="btnPluginInstall" class="pill-btn accent" type="button" data-i18n="install">Install</button>
+                    <button id="btnPluginUpdate" class="pill-btn" type="button" data-i18n="pluginUpdate">Update</button>
+                    <button id="btnPluginDetails" class="pill-btn" type="button" data-i18n="pluginDetails">Details</button>
+                    <button id="btnPluginEnable" class="pill-btn" type="button" data-i18n="enable">Enable</button>
+                    <button id="btnPluginDisable" class="pill-btn" type="button" data-i18n="disable">Disable</button>
+                    <button id="btnPluginUninstall" class="pill-btn" type="button" data-i18n="uninstall">Uninstall</button>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Marketplace catalog -->
+              <section class="tools-section" data-tools-section="marketplace">
+                <div class="tools-section-head">
+                  <div>
+                    <h4 data-i18n="toolsMarketplaceTitle">Plugin marketplace</h4>
+                    <p class="field-hint" data-i18n="toolsMarketplaceHint">Catalogs from CLI sources (xAI Official, Claude plugins…). Refresh cache, then install into the agent.</p>
+                  </div>
+                  <button type="button" class="help-btn" data-help="marketplace" data-i18n-title="help" data-i18n-aria="help" title="Help" aria-label="Help">?</button>
+                </div>
+                <div class="tools-actions">
+                  <button class="pill-btn accent" id="btnMktRefresh" type="button" data-i18n="mktRefresh">Refresh catalog</button>
+                  <button class="pill-btn" id="btnMktSources" type="button" data-i18n="mktListSources">List sources</button>
+                  <button class="pill-btn" id="btnMktUpdate" type="button" data-i18n="mktUpdateCache">Update cache</button>
+                </div>
+                <div class="settings-group tools-group">
+                  <div class="settings-group-title" data-i18n="mktSources">Marketplace sources</div>
+                  <div id="mktSourceList" class="mkt-source-list muted-pad" data-i18n="mktLoading">Loading…</div>
+                  <label class="field"><span data-i18n="mktAddSource">Add source (git URL or user/repo)</span>
+                    <input id="mktSourceUrl" type="text" data-i18n-placeholder="mktAddSourcePh" placeholder="https://github.com/org/plugins.git" autocomplete="off" />
+                  </label>
+                  <div class="tools-actions">
+                    <button id="btnMktAddSource" class="pill-btn accent" type="button" data-i18n="mktAdd">Add source</button>
+                    <button id="btnMktRmSource" class="pill-btn" type="button" data-i18n="mktRemove">Remove source</button>
+                  </div>
+                  <label class="field"><span data-i18n="mktSourceName">Source name (for remove)</span>
+                    <input id="mktSourceName" type="text" data-i18n-placeholder="mktSourceNamePh" placeholder="e.g. xAI Official" autocomplete="off" />
+                  </label>
+                </div>
+                <div class="settings-group tools-group">
+                  <div class="settings-group-title" data-i18n="mktBrowse">Browse plugins</div>
+                  <div class="mkt-filter-row">
+                    <input id="mktFilter" type="search" class="mkt-filter" data-i18n-placeholder="mktFilterPh" placeholder="Search name or description…" autocomplete="off" />
+                    <select id="mktMarketFilter" class="mkt-select" aria-label="Marketplace">
+                      <option value="" data-i18n="mktAll">All marketplaces</option>
+                    </select>
+                  </div>
+                  <p id="mktStats" class="field-hint"></p>
+                  <div id="mktPluginList" class="mkt-plugin-list"></div>
+                </div>
+              </section>
+
+              <!-- Worktrees (simplified; deep UX is in Manager) -->
+              <section class="tools-section" data-tools-section="worktree">
+                <div class="tools-section-head">
+                  <div>
+                    <h4 data-i18n="toolsWorktreeTitle">Git worktrees</h4>
+                    <p class="field-hint" data-i18n="toolsWorktreeHint">List and clean isolation folders. To start a session in a worktree, use Settings → Agent.</p>
+                  </div>
+                  <button type="button" class="help-btn" data-help="worktree" data-i18n-title="help" data-i18n-aria="help" title="Help" aria-label="Help">?</button>
+                </div>
+                <div class="tools-actions">
+                  <button class="pill-btn accent" id="btnWtList" type="button" data-i18n="listWorktrees">List worktrees</button>
+                  <button class="pill-btn" id="btnToolsOpenManager" type="button" data-i18n="openManager">Open Manager</button>
+                </div>
+                <div class="settings-group tools-group">
+                  <label class="field"><span data-i18n="worktreeName">Worktree name</span>
+                    <input id="wtName" type="text" data-i18n-placeholder="worktreeNamePh" placeholder="e.g. feat-ui" autocomplete="off" />
+                  </label>
+                  <div class="tools-actions">
+                    <button id="btnWtStart" class="pill-btn" type="button" data-i18n="showDetails">Show details</button>
+                    <button id="btnWtRm" class="pill-btn" type="button" data-i18n="remove">Remove</button>
+                  </div>
+                </div>
+              </section>
+
+              <div class="tools-output-wrap">
+                <div class="tools-output-head">
+                  <span data-i18n="toolsOutput">Output</span>
+                  <button type="button" class="mini" id="btnCliOutClear" data-i18n="clear">Clear</button>
+                </div>
+                <pre id="cliOut" class="editor-body tools-output"><code data-i18n="toolsOutputEmpty">Run a check or action above. Results appear here.</code></pre>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Pure project terminal (cwd = open project) -->
+      <div class="term-dock collapsed" id="termDock">
+        <div class="term-dock-bar">
+          <div class="term-dock-meta">
+            <span class="term-dock-title" data-i18n="terminal">Terminal</span>
+            <span class="term-cwd truncate" id="termCwd" title="">—</span>
+          </div>
+          <div class="term-dock-actions">
+            <button id="btnTermExternal" class="pill-btn term-mini" type="button" data-i18n="termExternal" title="Open system terminal (for TUI apps like grok)">External</button>
+            <button id="btnTermClear" class="pill-btn term-mini" type="button" data-i18n="clear" title="Clear">Clear</button>
+            <button id="btnTermRestart" class="pill-btn term-mini" type="button" data-i18n="restart" title="Restart in project folder">Restart</button>
+            <button id="btnTermClose" class="tab-x" type="button" data-i18n-title="hideTerminal" title="Hide terminal">×</button>
+          </div>
+        </div>
+        <div class="term-dock-body" id="termBody">
+          <div id="termEmpty" class="term-empty hidden">
+            <p data-i18n="termNeedProject">Open a project folder to use the terminal.</p>
+            <button type="button" class="pill-btn accent" id="btnTermPickProject" data-i18n="openFolder">Open folder</button>
+          </div>
+          <pre id="termOut" class="term-out" aria-live="polite"><code></code></pre>
+          <div class="term-input-row" id="termInputRow">
+            <span class="term-prompt-mark" id="termPromptMark">›</span>
+            <input id="termInput" type="text" data-i18n-placeholder="termTypeHere" placeholder="Type a command…" autocomplete="off" spellcheck="false" />
+          </div>
+        </div>
+      </div>
+    </div><!-- /main-stack -->
+    </div><!-- /app-body -->
+  </div><!-- /app -->
+
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-card settings-card">
+      <header class="modal-head">
+        <h2 data-i18n="settings">Settings</h2>
+        <button id="btnCloseSettings" class="tab-x" type="button" aria-label="Close">×</button>
+      </header>
+      <div class="modal-body settings-body">
+        <div class="settings-layout">
+          <nav class="settings-nav" id="settingsNav" aria-label="Settings sections">
+            <button type="button" class="settings-tab active" data-settings-tab="general" data-i18n="general">General</button>
+            <button type="button" class="settings-tab" data-settings-tab="project" data-i18n="project">Project</button>
+            <button type="button" class="settings-tab" data-settings-tab="agent" data-i18n="agent">Agent</button>
+            <button type="button" class="settings-tab" data-settings-tab="account" data-i18n="account">Account</button>
+            <button type="button" class="settings-tab" data-settings-tab="usage" data-i18n="usage">Usage</button>
+          </nav>
+          <div class="settings-content" id="settingsContent">
+
+            <!-- General: app chrome preferences -->
+            <section class="settings-panel active" data-settings-panel="general">
+              <h3 class="settings-panel-title" data-i18n="general">General</h3>
+              <p class="settings-lead" data-i18n="generalLead">Appearance and everyday app behavior.</p>
+
+              <div class="settings-group">
+                <div class="settings-group-title" data-i18n="appearance">Appearance</div>
+                <label class="field">
+                  <span data-i18n="theme">Theme</span>
+                  <select id="selTheme">
+                    <option value="system" data-i18n="themeSystem">System</option>
+                    <option value="dark" data-i18n="themeDark">Dark</option>
+                    <option value="light" data-i18n="themeLight">Light</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="settings-group">
+                <div class="settings-group-title" data-i18n="startupChat">Startup &amp; chat</div>
+                <label class="field check">
+                  <input id="chkAutoConnect" type="checkbox" checked />
+                  <span data-i18n="autoConnect">Auto-connect last project on launch</span>
+                </label>
+                <label class="field check">
+                  <input id="chkShowReasoning" type="checkbox" checked />
+                  <span data-i18n="showReasoning">Show reasoning / thought blocks</span>
+                </label>
+              </div>
+
+              <div class="settings-group">
+                <div class="settings-group-title" data-i18n="diagnostics">Diagnostics</div>
+                <label class="field check">
+                  <input id="chkTelemetry" type="checkbox" />
+                  <span data-i18n="telemetryOptIn">Performance metrics (local only)</span>
+                </label>
+                <p class="field-hint" data-i18n="telemetryHint">Connect, first token, tools — stored on this device only.</p>
+                <button type="button" class="pill-btn" id="btnTelemetrySummary" data-i18n="showLatency">Show latency summary</button>
+                <pre id="telemetryOut" class="settings-code hidden"></pre>
+              </div>
+            </section>
+
+            <!-- Project: paths -->
+            <section class="settings-panel" data-settings-panel="project">
+              <h3 class="settings-panel-title" data-i18n="project">Project</h3>
+              <p class="settings-lead" data-i18n="projectLead">Paths for this machine. Agent runs in the open project folder.</p>
+
+              <div class="settings-group">
+                <div class="settings-group-title" data-i18n="paths">Paths</div>
+                <label class="field">
+                  <span data-i18n="grokCli">Grok CLI</span>
+                  <input id="inpExecutable" type="text" readonly class="field-readonly" />
+                </label>
+                <p class="field-hint" data-i18n="grokCliHint">Resolved from PATH, ~/.grok/bin, or GROK_EXECUTABLE.</p>
+                <label class="field">
+                  <span data-i18n="workspace">Project folder</span>
+                  <input id="inpWorkspace" type="text" readonly class="field-readonly" />
+                </label>
+                <label class="field">
+                  <span data-i18n="idePath">Grok Build IDE</span>
+                  <input id="inpIdePath" type="text" data-i18n-placeholder="idePathPh" placeholder="Folder or .exe (optional override)" />
+                </label>
+                <p class="field-hint" data-i18n="idePathHint">Leave empty to use the default install location.</p>
+              </div>
+
+              <div class="settings-group">
+                <div class="settings-group-title" data-i18n="updates">Updates</div>
+                <label class="field">
+                  <span data-i18n="updateFeed">Update feed URL</span>
+                  <input id="inpUpdateUrl" type="text" data-i18n-placeholder="updateFeedPh" placeholder="https://…/latest.json (optional)" />
+                </label>
+              </div>
+            </section>
+
+            <!-- Agent: humanized launch options (maps to CLI flags on Connect) -->
+            <section class="settings-panel" data-settings-panel="agent">
+              <h3 class="settings-panel-title" data-i18n="agent">Agent</h3>
+              <p class="settings-lead" data-i18n="agentLead">Session options apply the next time you connect.</p>
+
+              <div class="settings-group">
+                <div class="settings-group-title" data-i18n="safety">Safety</div>
+                <label class="field">
+                  <span data-i18n="sandbox">Sandbox</span>
+                  <select id="selSandbox">
+                    <option value="" data-i18n="sandboxDefault">CLI default</option>
+                    <option value="off" data-i18n="sandboxOff">Off — unrestricted tools</option>
+                    <option value="default" data-i18n="sandboxStd">Standard</option>
+                    <option value="strict" data-i18n="sandboxStrict">Strict</option>
+                  </select>
+                </label>
+                <p class="field-hint" data-i18n="sandboxHint">Controls how tightly the agent may touch the filesystem and network.</p>
+
+                <label class="field check">
+                  <input id="chkWebSearch" type="checkbox" checked />
+                  <span data-i18n="allowWebSearch">Allow web search &amp; fetch</span>
+                </label>
+                <!-- maps to !disableWebSearch; hidden legacy id for compat -->
+                <input id="chkDisableWeb" type="checkbox" class="sr-only" tabindex="-1" aria-hidden="true" />
+
+                <label class="field check field-warn">
+                  <input id="chkAllowOutside" type="checkbox" />
+                  <span data-i18n="allowOutside">Allow files outside the project folder</span>
+                </label>
+                <p class="field-hint" data-i18n="allowOutsideHint">Off by default. Credential paths under ~/.grok stay blocked.</p>
+              </div>
+
+              <div class="settings-group">
+                <div class="settings-group-title" data-i18n="sessionLimits">Session</div>
+                <label class="field">
+                  <span data-i18n="maxTurns">Max agent turns</span>
+                  <select id="selMaxTurns">
+                    <option value="0" data-i18n="unlimited">Unlimited</option>
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="custom" data-i18n="custom">Custom…</option>
+                  </select>
+                </label>
+                <label class="field hidden" id="maxTurnsCustomWrap">
+                  <span data-i18n="customTurns">Custom limit</span>
+                  <input id="inpMaxTurns" type="number" min="1" max="9999" placeholder="e.g. 30" />
+                </label>
+                <label class="field check">
+                  <input id="chkExpMem" type="checkbox" />
+                  <span data-i18n="expMem">Cross-session memory</span>
+                </label>
+                <p class="field-hint" data-i18n="expMemHint">Lets the agent recall notes across chats in this project.</p>
+              </div>
+
+              <div class="settings-group">
+                <div class="settings-group-title" data-i18n="isolation">Isolation</div>
+                <label class="field check">
+                  <input id="chkWorktree" type="checkbox" />
+                  <span data-i18n="useWorktree">Start in a git worktree</span>
+                </label>
+                <p class="field-hint" data-i18n="useWorktreeHint">Keeps experimental edits off your main branch.</p>
+                <div id="worktreeFields" class="settings-subfields hidden">
+                  <label class="field">
+                    <span data-i18n="worktreeName">Worktree name</span>
+                    <input id="inpWorktree" type="text" data-i18n-placeholder="worktreeNamePh" placeholder="e.g. feat-ui" autocomplete="off" />
+                  </label>
+                  <label class="field">
+                    <span data-i18n="worktreeRef">Base branch / commit</span>
+                    <input id="inpWorktreeRef" type="text" data-i18n-placeholder="worktreeRefPh" placeholder="Optional — defaults to current HEAD" autocomplete="off" />
+                  </label>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="settings-group-title" data-i18n="toolAccess">Tools</div>
+                <label class="field">
+                  <span data-i18n="toolAccessMode">Tool access</span>
+                  <select id="selToolsMode">
+                    <option value="all" data-i18n="toolsAll">All built-in tools</option>
+                    <option value="allow" data-i18n="toolsAllow">Only allow listed tools</option>
+                    <option value="deny" data-i18n="toolsDeny">Deny listed tools</option>
+                  </select>
+                </label>
+                <div id="toolsListFields" class="settings-subfields hidden">
+                  <label class="field">
+                    <span id="toolsListLabel" data-i18n="toolNames">Tool names</span>
+                    <input id="inpToolsList" type="text" data-i18n-placeholder="toolNamesPh" placeholder="bash, read, edit, …" autocomplete="off" />
+                  </label>
+                  <div class="tool-presets" id="toolPresets" role="group" aria-label="Common tools"></div>
+                  <p class="field-hint" data-i18n="toolNamesHint">Comma-separated. Click a chip to add.</p>
+                </div>
+                <!-- legacy hidden fields for storage mapping -->
+                <input id="inpTools" type="hidden" />
+                <input id="inpDenied" type="hidden" />
+                <input id="inpSandbox" type="hidden" />
+              </div>
+
+              <div class="settings-group">
+                <div class="settings-group-title" data-i18n="instructions">Instructions</div>
+                <label class="field">
+                  <span data-i18n="extraRules">Extra rules</span>
+                  <textarea id="inpRules" rows="3" data-i18n-placeholder="extraRulesPh" placeholder="Added to the agent system prompt for this project…"></textarea>
+                </label>
+              </div>
+            </section>
+
+            <section class="settings-panel" data-settings-panel="account">
+              <h3 class="settings-panel-title" data-i18n="account">Account</h3>
+              <p class="settings-lead" id="settingsAuthHint" data-i18n="accountHint">Sign-in status and session controls.</p>
+              <div class="settings-actions">
+                <button id="btnSettingsLogin" class="pill-btn accent" type="button" data-i18n="login">Sign in</button>
+                <button id="btnSettingsLogout" class="pill-btn" type="button" data-i18n="logout">Sign out</button>
+                <button id="btnDisconnect" class="pill-btn" type="button" data-i18n="disconnectAgent">Disconnect agent</button>
+              </div>
+              <div class="settings-group">
+                <div class="settings-group-title">Imagine video</div>
+                <p class="field-hint" id="imagineVideoStatus" role="status">
+                  Checking privacy…
+                </p>
+                <p class="field-hint">
+                  Hosted <code>image_to_video</code> needs coding-data retention <strong>Opt in</strong>
+                  (Grok TUI <code>/privacy</code>). Opt out causes HTTP 400 <code>upload_url</code> / ZDR-style errors.
+                  Team ZDR must also be Disabled in the xAI Console.
+                </p>
+                <div class="settings-actions">
+                  <button id="btnRefreshImaginePrivacy" class="pill-btn" type="button">Refresh privacy status</button>
+                </div>
+              </div>
+              <div class="settings-group">
+                <div class="settings-group-title" data-i18n="app">App</div>
+                <div class="settings-actions">
+                  <button id="btnCheckUpdate" class="pill-btn" type="button" data-i18n="checkUpdates">Check for updates</button>
+                  <button id="btnAbout" class="pill-btn" type="button" data-i18n="about">About</button>
+                </div>
+                <p class="field-hint" data-i18n="shortcuts">Shortcuts: Ctrl+Enter send · Ctrl+N new · Ctrl+L prompt · Ctrl+, settings · Ctrl+T terminal · Esc cancel</p>
+              </div>
+            </section>
+
+            <section class="settings-panel" data-settings-panel="usage">
+              <h3 class="settings-panel-title"><span data-i18n="usage">Usage</span></h3>
+              <p class="settings-lead" id="usageHint" data-i18n="usageHint">Session tokens and SuperGrok plan limit.</p>
+              <div class="usage-stack" id="usagePanel" aria-live="polite">
+                <div class="usage-card" id="usageSessionCard">
+                  <div class="usage-card-head">
+                    <h4 class="usage-card-title" data-i18n="sessionUsage">This session</h4>
+                    <p class="usage-card-sub" data-i18n="sessionUsageSub">Since start or last resume</p>
+                  </div>
+                  <div class="usage-rows" id="usageSessionRows"></div>
+                  <p class="usage-empty hidden" id="usageSessionEmpty" data-i18n="noSessionUsage">No model usage in this session yet.</p>
+                </div>
+                <div class="usage-card" id="usagePlanCard">
+                  <div class="usage-card-head">
+                    <h4 class="usage-card-title" id="usagePlanTitle" data-i18n="planLimit">Plan limit</h4>
+                    <p class="usage-card-sub" id="usagePlanPct">—</p>
+                  </div>
+                  <div class="usage-bar-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="usagePlanBarWrap">
+                    <div class="usage-bar" id="usagePlanBar" style="width:0%"></div>
+                  </div>
+                  <div class="usage-rows" id="usagePlanRows"></div>
+                </div>
+                <p class="usage-meta" id="usageMeta"></p>
+              </div>
+              <div class="settings-actions">
+                <button id="btnRefreshUsage" class="pill-btn accent" type="button"><span data-icon="refresh" data-icon-size="14"></span> <span data-i18n="refreshUsage">Refresh</span></button>
+                <button id="btnManageBilling" class="pill-btn" type="button"><span data-icon="external" data-icon-size="14"></span> <span data-i18n="manageBilling">Manage billing</span></button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+      <footer class="modal-foot">
+        <span class="settings-foot-hint" data-i18n="agentApplyHint">Agent options apply on next Connect</span>
+        <button id="btnSaveSettings" class="pill-btn accent" type="button" data-i18n="save">Save</button>
+      </footer>
+    </div>
+  </div>
+
+  <div id="helpModal" class="modal hidden">
+    <div class="modal-card wide help-card">
+      <header class="modal-head">
+        <h2 id="helpModalTitle">Help</h2>
+        <button id="btnCloseHelp" class="tab-x" type="button" aria-label="Close">×</button>
+      </header>
+      <div class="modal-body help-body" id="helpModalBody"></div>
+      <footer class="modal-foot">
+        <button id="btnHelpDone" class="pill-btn accent" type="button" data-i18n="gotIt">Got it</button>
+      </footer>
+    </div>
+  </div>
+
+  <div id="aboutModal" class="modal hidden">
+    <div class="modal-card">
+      <header class="modal-head">
+        <h2>About Grok Build</h2>
+        <button id="btnCloseAbout" class="tab-x" type="button">×</button>
+      </header>
+      <div class="modal-body about-body">
+        <img class="about-logo" src="assets/logo.png" width="72" height="72" alt="Grok Build" />
+        <p><strong id="aboutVersion">Grok Build</strong></p>
+        <p class="hint-block">Agent desktop over official <code>grok agent stdio</code> (ACP).<br/>Not affiliated with xAI. Community product shell.</p>
+        <p class="hint-block" id="aboutPaths"></p>
+      </div>
+      <footer class="modal-foot">
+        <button id="btnAboutDone" class="pill-btn accent" type="button">OK</button>
+      </footer>
+    </div>
+  </div>
+
+  <div id="ideModal" class="modal hidden">
+    <div class="modal-card">
+      <header class="modal-head">
+        <h2 id="ideModalTitle" data-i18n="ideNotInstalledTitle">Grok Build IDE</h2>
+        <button id="btnCloseIdeModal" class="tab-x" type="button" aria-label="Close">×</button>
+      </header>
+      <div class="modal-body">
+        <p class="hint-block" id="ideModalBody" data-i18n="ideNotInstalledBody">
+          Grok Build IDE is not installed on this PC.
+        </p>
+        <p class="hint-block mono-path" id="ideModalPath"></p>
+        <p class="hint-block" id="ideModalHint" data-i18n="ideNotInstalledHint">
+          Install the IDE, or set Settings → IDE path to your install folder / .exe.
+        </p>
+      </div>
+      <footer class="modal-foot">
+        <button id="btnIdeDismiss" class="pill-btn" type="button" data-i18n="ideDismiss">Not now</button>
+        <button id="btnIdeDownload" class="pill-btn accent" type="button" data-i18n="ideDownload">Download IDE</button>
+      </footer>
+    </div>
+  </div>
+
+  <script src="lib/icons.js"></script>
+  <script src="lib/i18n.js"></script>
+  <script src="lib/domHelpers.js"></script>
+  <script src="lib/diffHunks.js"></script>
+  <script src="lib/fileMentions.js"></script>
+  <script src="lib/agentSlotsUi.js"></script>
+  <script src="lib/slashCommands.js"></script>
+  <script src="lib/markdown.js"></script>
+  <script src="lib/eventStore.js"></script>
+  <script src="lib/streamBatcher.js"></script>
+  <script src="lib/offthread.js"></script>
+  <script src="lib/timelineView.js"></script>
+  <script src="lib/sessionTabs.js"></script>
+  <script src="lib/commandPalette.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

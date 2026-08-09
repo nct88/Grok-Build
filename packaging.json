@@ -1,0 +1,20 @@
+{
+  "product": "Grok Build",
+  "versionSource": "product/VERSION",
+  "tool": "electron-builder",
+  "command": "npm run release -- -Version <version>",
+  "channels": {
+    "portable": "dist/<version>/portable/",
+    "install": "dist/<version>/install/",
+    "update": "dist/<version>/update/"
+  },
+  "manifest": "dist/<version>/MANIFEST.json",
+  "latest": "dist/latest.json",
+  "immutableVersions": true,
+  "license": "LICENSE",
+  "distribution": "private/local unless separately authorized",
+  "signing": {
+    "requiredForPublicRelease": true,
+    "status": "external-gate"
+  }
+}

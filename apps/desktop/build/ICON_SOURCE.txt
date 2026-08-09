@@ -1,0 +1,5 @@
+Grok Build desktop icons
+Source: logo/fluffy-grok-master.png
+PNG: apps/desktop/build/icon.png
+ICO: apps/desktop/build/icon.ico (Windows exe / taskbar / Start menu)
+Re-run: node apps/desktop/build/generate-icon.mjs

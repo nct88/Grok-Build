@@ -1,0 +1,106 @@
+{
+    "name":  "@grok-build/desktop",
+    "version":  "0.5.29",
+    "private":  true,
+    "description":  "Grok Build agent desktop — thin Electron shell over grok agent stdio (no VS Code)",
+    "main":  "src/main.cjs",
+    "type":  "commonjs",
+    "author":  "Grok Build",
+    "scripts":  {
+                    "start":  "node build/run-dev.cjs",
+                    "dev":  "node build/run-dev.cjs",
+                    "start:plain":  "electron .",
+                    "icons":  "node build/generate-icon.mjs \u0026\u0026 node build/stamp-dev-electron-icon.cjs",
+                    "icons:stamp-dev":  "node build/stamp-dev-electron-icon.cjs",
+                    "prestart":  "node build/stamp-dev-electron-icon.cjs",
+                    "pack":  "electron-builder --dir",
+                    "dist":  "electron-builder --win portable nsis"
+                },
+    "dependencies":  {
+                         "@grok-build/acp-client":  "file:../../packages/acp-client",
+                         "@grok-build/sessions":  "file:../../packages/sessions"
+                     },
+    "devDependencies":  {
+                            "electron":  "43.3.0",
+                            "electron-builder":  "26.15.3"
+                        },
+    "build":  {
+                  "appId":  "local.grok.build.desktop",
+                  "productName":  "Grok Build",
+                  "electronVersion":  "43.3.0",
+                  "npmRebuild":  false,
+                  "directories":  {
+                                      "output":  "../../dist/desktop",
+                                      "buildResources":  "build"
+                                  },
+                  "icon":  "build/icon.ico",
+                  "afterPack":  "build/stamp-win-icon.cjs",
+                  "files":  [
+                                "src/**/*",
+                                "renderer/**/*",
+                                "package.json",
+                                "build/icon.ico",
+                                "build/icon.png"
+                            ],
+                  "extraResources":  [
+                                         {
+                                             "from":  "build/icon.ico",
+                                             "to":  "icon.ico"
+                                         },
+                                         {
+                                             "from":  "../../packages/acp-client/dist",
+                                             "to":  "packages/acp-client/dist",
+                                             "filter":  [
+                                                            "**/*"
+                                                        ]
+                                         },
+                                         {
+                                             "from":  "../../packages/sessions/dist",
+                                             "to":  "packages/sessions/dist",
+                                             "filter":  [
+                                                            "**/*"
+                                                        ]
+                                         }
+                                     ],
+                  "win":  {
+                              "icon":  "build/icon.ico",
+                              "signAndEditExecutable":  false,
+                              "verifyUpdateCodeSignature":  false,
+                              "target":  [
+                                             {
+                                                 "target":  "portable",
+                                                 "arch":  [
+                                                              "x64"
+                                                          ]
+                                             },
+                                             {
+                                                 "target":  "nsis",
+                                                 "arch":  [
+                                                              "x64"
+                                                          ]
+                                             },
+                                             {
+                                                 "target":  "dir",
+                                                 "arch":  [
+                                                              "x64"
+                                                          ]
+                                             }
+                                         ]
+                          },
+                  "portable":  {
+                                   "artifactName":  "Grok-Build-${version}-win32-x64-portable.exe"
+                               },
+                  "nsis":  {
+                               "oneClick":  false,
+                               "allowToChangeInstallationDirectory":  true,
+                               "createDesktopShortcut":  true,
+                               "createStartMenuShortcut":  true,
+                               "shortcutName":  "Grok Build",
+                               "artifactName":  "Grok-Build-Setup-${version}.exe",
+                               "installerIcon":  "build/icon.ico",
+                               "uninstallerIcon":  "build/icon.ico",
+                               "installerHeaderIcon":  "build/icon.ico",
+                               "deleteAppDataOnUninstall":  false
+                           }
+              }
+}
