@@ -6,6 +6,7 @@ scratch/
 docs/reports/evidence/
 packages/*/dist/
 apps/desktop/out/
+/apps/desktop/build/dev-electron-path.txt
 .env
 .env.*
 !.env.example
@@ -21,3 +22,14 @@ id_ed25519
 *.log
 .DS_Store
 Thumbs.db
+
+# Superseded local/prototype assets retained only on this workstation
+/styles.css
+/assets/grok_icon_transparent.png
+/assets/grok_logo_fluffy_transparent.png
+/assets/pets/chibi-cat-desktop-pet.jpg
+/assets/pets/chibi-cat-pet-6s.mp4
+/assets/pets/chibi-cat-video-frame-1x1.jpg
+/logo/Gemini_Generated_Image_hreqsahreqsahreq.png
+/logo/grok-logo-main.jpg
+/logo/image.jpg

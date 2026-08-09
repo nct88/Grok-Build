@@ -1,5 +1,13 @@
 # FIX / CHANGE LOG
 
+## Unreleased — Repository hygiene for generated and superseded local files
+
+- Symptom: Git tracked a machine-specific Electron development executable path, an outdated root-level CSS copy, duplicate logo files, and unreferenced prototype/raw media totaling 9.51 MiB.
+- Root cause: the initial repository import included local runtime metadata and exploratory assets that are outside the current Desktop source, branding, test, and release pipelines.
+- Resolution: add exact ignore rules and remove the 10 confirmed files from Git tracking while preserving their local copies.
+- Preserved inputs: the canonical Fluffy masters, processed icon matrix, packaged PNG/ICO, renderer logo, documented fallbacks, report documents, and release manifests remain tracked.
+- Verification: tracked-reference and duplicate-hash audits, `git check-ignore`, `git diff --check`, and the root `npm run check` gate.
+
 ## Unreleased — GitHub preflight security hardening
 
 - Blocked HTTP(S) URLs containing embedded usernames or passwords before they reach the OS browser and added a regression case to the desktop security gate.
