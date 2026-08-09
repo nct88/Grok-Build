@@ -1,189 +1,319 @@
 # Grok Build
 
-**Agent desktop** over the official **Grok CLI** (`grok agent stdio` + **ACP**).  
-Optional companion: **Grok Build IDE** (separate Code-OSS install).
+Grok Build là ứng dụng **agent desktop** chạy trên Electron, sử dụng **Grok CLI chính thức** qua giao thức ACP (`grok agent stdio`). Ứng dụng tập trung vào trải nghiệm trò chuyện, quản lý phiên, duyệt thay đổi mã nguồn, terminal và điều phối công việc; vòng lặp agent, công cụ, xác thực và phiên làm việc vẫn do Grok CLI quản lý.
 
-> **CLI-as-core · UI-as-surface** — the agent loop, tools, auth, and sessions live in Grok CLI (`~/.grok`). This app is a product-quality surface, not a VS Code reskin and not a second agent runtime.
+> **CLI là lõi · Desktop là giao diện.** Grok Build không phải bản đổi giao diện của VS Code và không triển khai một agent runtime thứ hai.
 
-**Ship line:** see [`product/VERSION`](product/VERSION) (desktop package version follows the monorepo root).
+Phiên bản Desktop hiện tại: **0.5.29** — xem [`product/VERSION`](product/VERSION).
+
+## Tải xuống
+
+Release hiện tại nằm trong repository private và yêu cầu tài khoản GitHub có quyền truy cập:
+
+| Gói | Mục đích | Tải xuống |
+|---|---|---|
+| NSIS Setup | Cài vào Windows, tạo Start Menu/shortcut | [Grok-Build-Setup-0.5.29.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.29/Grok-Build-Setup-0.5.29.exe) |
+| Portable EXE | Chạy dạng file tự giải nén | [Grok-Build-0.5.29-win32-x64-portable.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.29/Grok-Build-0.5.29-win32-x64-portable.exe) |
+| Portable ZIP | Giải nén một lần, phù hợp dùng lâu dài | [Grok-Build-0.5.29-win32-x64.zip](https://github.com/nct88/Grok-Build/releases/download/v0.5.29/Grok-Build-0.5.29-win32-x64.zip) |
+| Manifest | Kích thước và SHA-256 của artifact | [MANIFEST.json](https://github.com/nct88/Grok-Build/releases/download/v0.5.29/MANIFEST.json) |
+
+Trang release: [Grok Build v0.5.29](https://github.com/nct88/Grok-Build/releases/tag/v0.5.29).
+
+Các file Windows hiện chưa được ký Authenticode. SmartScreen có thể cảnh báo trong lần chạy đầu; hãy kiểm tra SHA-256 trong `MANIFEST.json` trước khi mở file.
+
+## Quan hệ giữa các sản phẩm
+
+| Thành phần | Vai trò | Vị trí |
+|---|---|---|
+| **Grok Build** | Ứng dụng agent desktop chính của repository này | `apps/desktop` |
+| **Grok Build IDE** | Trình soạn thảo Code-OSS tùy chọn, phát hành riêng | Repository `nct88/Grok-Build-IDE` |
+| **Grok CLI** | Agent engine chính thức, bắt buộc để kết nối | `grok` trên `PATH`, `~/.grok/bin/grok.exe` hoặc `GROK_EXECUTABLE` |
 
 ```text
 Grok Build Desktop (Electron)
-    → AgentSupervisor (main)
+    → AgentSupervisor (Electron main process)
         → packages/acp-client (GrokClient)
-            → grok agent stdio     ← owns intelligence / tool loop
-                → ~/.grok          ← auth, sessions, skills
+            → grok agent stdio
+                → ~/.grok (xác thực, phiên, cấu hình CLI)
 ```
 
----
+## Tính năng chính
 
-## Products
+### Trò chuyện và agent
 
-| Product | Role | Location |
-|---------|------|----------|
-| **Grok Build** | Primary agent desktop (this monorepo) | `apps/desktop` |
-| **Grok Build IDE** | Optional full editor (Code-OSS) | Separate tree / install — **not** vendored here |
-| **Grok CLI** | Official agent engine (required) | `grok` on PATH or `GROK_EXECUTABLE` |
+- Hiển thị nội dung trả lời theo luồng, Markdown, thinking, plan và trạng thái công cụ.
+- Gom các lời gọi công cụ thành nhóm; câu trả lời cuối được hiển thị phía dưới hoạt động công cụ.
+- Chọn model, reasoning effort, mode và chính sách quyền ngay tại composer.
+- Hỗ trợ hủy lượt chạy và xếp hàng prompt tiếp theo khi agent đang bận.
+- `AgentSupervisor` giữ kết nối ấm, tự kết nối lại và hỗ trợ tối đa hai slot tương tác.
 
-Default Windows install paths: [`docs/INSTALL_PATHS.md`](docs/INSTALL_PATHS.md).
+### Dự án, phiên và lịch sử
 
-| App | Default dir | Executable |
-|-----|-------------|------------|
-| Grok Build | `%LOCALAPPDATA%\Programs\Grok Build\` | `Grok Build.exe` |
-| Grok Build IDE | `%LOCALAPPDATA%\Programs\Grok Build IDE\` | `Grok Build IDE.exe` |
+- Projects chỉ chứa thư mục thật; cuộc trò chuyện được lồng dưới từng dự án.
+- Khu vực Recents dành riêng cho cuộc trò chuyện không gắn dự án.
+- Có thể trò chuyện không cần chọn project; agent dùng thư mục `~/.grok/desktop-recents`.
+- Mở lại phiên, phát lại lịch sử, đổi phiên, xuất Markdown hoặc xóa phiên cục bộ.
+- Hỗ trợ nhiều tab phiên và chuyển slot agent.
 
----
+### Tệp, review và terminal
 
-## Features (desktop v1 surface)
+- Đính kèm tệp, kéo-thả, dán ảnh và chèn tham chiếu `@file`.
+- Theo dõi các tệp agent đã chỉnh sửa trong panel Files/Review.
+- Xem diff và chấp nhận/từ chối toàn bộ thay đổi hoặc từng hunk.
+- Terminal tương tác trong workspace và reverse terminal qua ACP khi runtime hỗ trợ.
+- Thanh trạng thái Git, thông tin thay đổi và lối tắt tạo Pull Request.
 
-- Streaming chat, thinking / plan, markdown timeline  
-- Tool cards, permissions, model / effort / mode  
-- Files + **Review** (accept/reject, **hunk-level**)  
-- Interactive **terminal** + ACP reverse where applicable  
-- Session tabs, history replay, export / delete  
-- **Manager**: headless jobs (`grok -p`), artifacts, worktree UI  
-- MCP / plugins forms aligned with CLI flags  
-- Theme light / dark / system · **i18n EN / VI**  
-- Usage / plan limit (same billing source as CLI `/usage`)  
-- Multi-slot agent foundation (primary + optional parallel)  
-- **Open IDE** deep-link for current workspace  
-- Portable + NSIS + hot-update channel  
+### Manager và hệ sinh thái CLI
 
----
+- Chạy job headless qua `grok -p`, theo dõi trạng thái và artifact.
+- Giao diện quản lý worktree, MCP server và plugin theo các cờ của Grok CLI.
+- Các lối tắt cho `doctor`, đăng nhập/đăng xuất, phiên bản CLI và danh sách cấu hình.
+- Hiển thị usage/plan dựa trên cùng nguồn dữ liệu mà Grok CLI sử dụng.
 
-## Repository layout
+### Media và trải nghiệm desktop
+
+- `/imagine` tạo ảnh và hiển thị preview từ thư mục media của phiên.
+- `/imagine-video` có bước kiểm tra quyền riêng tư trước khi gửi yêu cầu.
+- Lightbox ảnh, mở thư mục, sao chép và phát video qua blob URL.
+- Giao diện tiếng Anh/tiếng Việt, theme sáng/tối/theo hệ thống.
+- Nút **Open IDE** mở Grok Build IDE và truyền workspace hiện tại.
+- Có menu ứng dụng, phím tắt, About và kiểm tra update feed.
+
+## Yêu cầu hệ thống
+
+### Người dùng
+
+- Windows x64.
+- Grok CLI đã được cài đặt.
+- Tài khoản đã xác thực bằng `grok login` hoặc cơ chế tương đương của CLI.
+
+Thứ tự tìm Grok CLI:
+
+1. Biến môi trường `GROK_EXECUTABLE`.
+2. Lệnh `grok` trên `PATH`.
+3. `%USERPROFILE%\.grok\bin\grok.exe`.
+
+### Phát triển
+
+- Node.js 20 trở lên.
+- npm hỗ trợ workspaces.
+- Windows cần thiết khi tạo NSIS/portable executable.
+
+## Cài đặt và sử dụng nhanh
+
+### Cách 1: NSIS Setup
+
+1. Tải `Grok-Build-Setup-0.5.29.exe` từ release.
+2. Kiểm tra checksum trong `MANIFEST.json`.
+3. Chạy installer và mở **Grok Build** từ Start Menu.
+4. Chọn project hoặc bắt đầu một cuộc trò chuyện không có project.
+5. Nhấn **Connect** để khởi tạo `grok agent stdio`.
+
+Đường dẫn cài mặc định:
 
 ```text
-Grok-Build/
-├─ apps/desktop/           primary product (Electron)
-├─ packages/acp-client/    ACP client + Node FS host
-├─ packages/sessions/      local session index
-├─ dist/                   local build output (not always in git)
-├─ docs/                   architecture, distribution, marketing
-├─ product/                VERSION, product identity
-└─ scripts/                dev, publish, e2e, architecture checks
+%LOCALAPPDATA%\Programs\Grok Build\Grok Build.exe
 ```
 
----
+### Cách 2: Portable ZIP
 
-## Requirements
+1. Tải file ZIP.
+2. Giải nén vào một thư mục cố định.
+3. Chạy `Grok Build.exe` trong thư mục vừa giải nén.
 
-- **Node.js** ≥ 20 (develop / build)  
-- **Windows x64** for current packaged builds  
-- **Grok CLI** installed and authenticated (`grok login`)  
+ZIP phù hợp hơn portable EXE nếu sử dụng hằng ngày vì không phải tự giải nén lại mỗi lần chạy.
 
-Resolve order for the CLI: `GROK_EXECUTABLE` → PATH → `%USERPROFILE%\.grok\bin\grok.exe`.
-
----
-
-## Run (development)
+## Chạy từ mã nguồn
 
 ```powershell
-cd <your-clone>\Grok-Build
+git clone https://github.com/nct88/Grok-Build.git
+cd Grok-Build
 npm install
 npm run desktop
-# or: powershell -File scripts\dev-desktop.ps1
-# or: desktop.cmd
 ```
 
----
-
-## Quality gates
+Lệnh tương đương trên Windows:
 
 ```powershell
-npm run check          # architecture + packaging + e2e unit suite
-npm test               # e2e only
-# $env:GROK_E2E_LIVE=1; npm test   # optional live grok --version
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev-desktop.ps1
 ```
 
-Hard rules (enforced by `check:arch`):
+Các lệnh thường dùng:
 
-- Agent loop only in **Grok CLI**  
-- Renderer never spawns agent processes or calls model HTTP APIs  
-- Desktop uses **ACP** via `packages/acp-client` only  
-- No full Code-OSS tree in this monorepo  
+| Lệnh | Công dụng |
+|---|---|
+| `npm run desktop` | Build các package và chạy Electron Desktop |
+| `npm run build` | Build ACP client và session package |
+| `npm run icons` | Sinh/stamp bộ icon Desktop |
+| `npm run check` | Chạy toàn bộ cổng architecture, packaging, brand, test và visual |
+| `npm test` | Chạy bộ kiểm thử desktop |
+| `npm run dist:desktop` | Tạo output electron-builder |
+| `npm run portable` | Cài bản ZIP vào LocalAppData và chạy |
+| `npm run portable:shortcut` | Cài bản ZIP và tạo shortcut Desktop |
 
----
+## Kiến trúc
 
-## Release packages (Windows)
+### Ranh giới bắt buộc
+
+- Agent loop chỉ tồn tại trong Grok CLI.
+- Renderer không tự spawn agent process và không gọi trực tiếp model HTTP API.
+- Desktop giao tiếp với CLI qua ACP trong `packages/acp-client`.
+- Repository này không chứa cây mã nguồn Code-OSS; IDE nằm ở repository riêng.
+
+### Các module Electron chính
+
+| Module | Trách nhiệm |
+|---|---|
+| `main.cjs` | Tạo cửa sổ, đăng ký IPC và nối các module |
+| `agentSupervisor.cjs` | Quản lý vòng đời ACP, reconnect và slot agent |
+| `launchArgs.cjs` | Chuẩn hóa quyền và tạo danh sách tham số CLI |
+| `productPaths.cjs` | Tìm đường dẫn Desktop/IDE trên Windows |
+| `ipcContract.cjs` | Danh sách invoke/event được preload cho phép |
+| `security.cjs` | Giới hạn workspace, URL và lệnh CLI |
+| `jobRunner.cjs` | Chạy job headless qua `grok -p` |
+| `artifactStore.cjs` | Lưu và lập chỉ mục artifact của job |
+| `controlPlane.cjs` | Snapshot health và capability |
+| `telemetry.cjs` | Các bucket hiệu năng cục bộ, chỉ bật khi người dùng chọn |
+
+Xem chi tiết tại [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Dữ liệu và bảo mật
+
+- Xác thực và phiên của CLI nằm trong `%USERPROFILE%\.grok`.
+- State của ứng dụng Desktop mặc định nằm trong `%APPDATA%\@grok-build\desktop`.
+- Truy cập tệp được giới hạn theo workspace, trừ khi người dùng bật quyền ngoài workspace.
+- URL ngoài ứng dụng chỉ chấp nhận chính sách HTTP(S) an toàn; URL chứa credential bị chặn.
+- Các lệnh CLI từ giao diện đi qua allowlist thay vì chạy chuỗi tùy ý.
+- Telemetry hiệu năng của Desktop là opt-in và được lưu cục bộ.
+
+Không commit file xác thực, token, cookie, `.env`, private key hoặc dữ liệu phiên cá nhân vào repository.
+
+## Kiểm thử và cổng chất lượng
+
+```powershell
+npm run check
+```
+
+Lệnh trên lần lượt kiểm tra:
+
+1. Ranh giới kiến trúc.
+2. Hợp đồng đóng gói Electron/NSIS.
+3. Đồng bộ và chất lượng brand asset.
+4. Hợp đồng release/version.
+5. Bộ test desktop.
+6. Layout/render ở viewport hỗ trợ.
+
+Chạy kiểm thử có kết nối Grok CLI thật khi cần:
+
+```powershell
+$env:GROK_E2E_LIVE = '1'
+npm test
+```
+
+## Đóng gói release Windows
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass `
-  -File scripts\publish-release.ps1 -Version <semver>
+  -File scripts\publish-release.ps1 `
+  -Version <semver>
 ```
 
-Example channels after publish (replace `<ver>`):
-
-| Channel | Path |
-|---------|------|
-| **Portable exe** | `dist/<ver>/portable/Grok-Build-<ver>-win32-x64-portable.exe` |
-| **Portable zip** (recommended durable install) | `dist/<ver>/portable/Grok-Build-<ver>-win32-x64.zip` |
-| **NSIS setup** | `dist/<ver>/install/Grok-Build-Setup-<ver>.exe` |
-| **Hot update** | `dist/<ver>/update/` + `apply-update.ps1` |
-| **Feed** | `dist/latest.json` |
-
-Helpers:
-
-```powershell
-npm run portable              # install zip → LocalAppData Programs + launch
-npm run portable:shortcut     # + Desktop shortcut
-```
-
-Windows builds are often **unsigned** — SmartScreen may warn on first run.  
-Details: [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
-
----
-
-## Optional IDE
-
-Full editor lives **outside** this monorepo (e.g. local IDE project or installed under LocalAppData).
-
-From the desktop: **Open IDE** resolves:
-
-1. Settings → IDE path  
-2. Env `GROK_BUILD_IDE`  
-3. Default install / common locations  
-
-If missing, the app can show a download placeholder until a public IDE release URL is configured.
-
----
-
-## Docs
-
-| Doc | Content |
-|-----|---------|
-| [Architecture](docs/ARCHITECTURE.md) | Layers, AgentSupervisor, packaging rules |
-| [Roadmap](docs/ROADMAP.md) | Ship line, P0–P2, next |
-| [Distribution](docs/DISTRIBUTION.md) | Channels, signing, SmartScreen |
-| [Install paths](docs/INSTALL_PATHS.md) | Desktop + IDE discovery |
-| [Release status](docs/COMPLETE.md) | Feature inventory |
-| [Social launch copy (VI/EN)](docs/marketing/SOCIAL_LAUNCH_VI.md) | Posts for social networks |
-| [GitHub release helper](docs/marketing/GITHUB_RELEASE_AND_REPO.md) | About, topics, release body |
-| [Release notes 1.0 draft](docs/marketing/release-notes-1.0.md) | GH Release template |
-
----
-
-## Philosophy
+Mỗi version là bất biến; script sẽ dừng nếu `dist/<version>` đã tồn tại.
 
 ```text
-Surface (Desktop / IDE / TUI)
-    → Protocol (ACP)
-        → Core (Grok CLI)
-            → Host (FS, shell, auth, sessions)
+dist/<version>/
+├─ install/
+│  └─ Grok-Build-Setup-<version>.exe
+├─ portable/
+│  ├─ Grok-Build-<version>-win32-x64-portable.exe
+│  └─ Grok-Build-<version>-win32-x64.zip
+├─ update/
+│  ├─ app.asar
+│  ├─ packages/
+│  └─ apply-update.ps1
+├─ MANIFEST.json
+└─ latest.json
 ```
 
-Grok Build Desktop optimizes the **surface**: speed, review safety, sessions, jobs, localization — without forking the intelligence layer.
+Phát hành công khai yêu cầu HTTPS và chữ ký Authenticode hợp lệ. Xem [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
 
----
+## Cấu trúc repository
 
-## License
+```text
+Grok-Build/
+├─ apps/desktop/           Electron main, preload, renderer và packaging
+├─ packages/acp-client/    ACP client và Node filesystem host
+├─ packages/sessions/      Chỉ mục phiên Grok cục bộ
+├─ product/                Version và nhận diện sản phẩm
+├─ logo/                   Nguồn và ma trận icon đã xử lý
+├─ scripts/                Dev, test, kiểm tra và release automation
+├─ docs/                   Kiến trúc, phân phối, roadmap và báo cáo
+├─ fix-bug/                Lịch sử sửa lỗi/thay đổi
+└─ dist/                   Artifact build cục bộ, thường không commit
+```
 
-Copyright (c) 2026 Grok Build contributors. All rights reserved. See
-[LICENSE](LICENSE). No open-source license is granted for this repository.
+## Khắc phục sự cố
 
-Third-party components remain subject to their own licenses and notices.
+### Không tìm thấy Grok CLI
 
-## Disclaimer
+Chạy:
 
-Grok CLI and Grok models are products of their respective owners (xAI / Grok ecosystem).  
-This repository provides an **independent desktop surface** that launches and speaks to the official CLI via ACP. Not affiliated unless explicitly stated.
+```powershell
+grok --version
+grok doctor
+```
+
+Nếu lệnh không tồn tại, thêm Grok CLI vào `PATH` hoặc đặt `GROK_EXECUTABLE` trỏ đến file `grok.exe`.
+
+### Không kết nối được agent
+
+Kiểm tra đăng nhập:
+
+```powershell
+grok login
+grok doctor
+```
+
+Sau đó mở lại Grok Build và nhấn **Connect**.
+
+### SmartScreen cảnh báo
+
+Build hiện chưa ký số. So sánh SHA-256 với `MANIFEST.json`; chỉ chọn **More info → Run anyway** khi checksum khớp và file được tải từ release chính thức.
+
+### Icon cũ vẫn xuất hiện sau khi nâng cấp
+
+Windows có thể giữ cache icon của shortcut đã ghim. Gỡ shortcut cũ khỏi Taskbar/Start, mở bản mới một lần rồi ghim lại shortcut từ ứng dụng vừa cài.
+
+### `/imagine-video` bị chặn
+
+Tính năng video yêu cầu tài khoản cho phép lưu dữ liệu coding (`coding_data_retention_opt_out: false`). Thiết lập này thuộc tài khoản/Grok TUI, không được Electron tự thay đổi.
+
+### Nút Open IDE không tìm thấy IDE
+
+Ứng dụng tìm theo Settings, biến `GROK_BUILD_IDE`, đường dẫn cài mặc định và một số vị trí phổ biến. Có thể đặt `GROK_BUILD_IDE` bằng đường dẫn đầy đủ đến `Grok Build IDE.exe`.
+
+## Tài liệu liên quan
+
+| Tài liệu | Nội dung |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Ranh giới kiến trúc và module chính |
+| [`docs/COMPLETE.md`](docs/COMPLETE.md) | Trạng thái phiên bản và feature inventory |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Ship line và hướng phát triển tiếp theo |
+| [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) | Kênh phát hành, signing và SmartScreen |
+| [`docs/INSTALL_PATHS.md`](docs/INSTALL_PATHS.md) | Đường dẫn cài Desktop/IDE |
+| [`docs/reports/SECURITY_REVIEW_0.5.20.md`](docs/reports/SECURITY_REVIEW_0.5.20.md) | Báo cáo rà soát bảo mật |
+
+## Đóng góp
+
+1. Tạo nhánh riêng cho thay đổi.
+2. Không đưa secret hoặc dữ liệu phiên cá nhân vào commit.
+3. Chạy `npm run check` trước khi mở Pull Request.
+4. Mô tả rõ hành vi thay đổi và bằng chứng kiểm thử trong PR.
+
+## Giấy phép và tuyên bố
+
+Copyright © 2026 Grok Build contributors. **All rights reserved.** Repository này không cấp giấy phép mã nguồn mở (**No open-source license is granted**); xem [`LICENSE`](LICENSE).
+
+Các thành phần bên thứ ba tuân theo giấy phép và thông báo riêng của chúng.
+
+Grok CLI và các model Grok thuộc chủ sở hữu tương ứng trong hệ sinh thái xAI/Grok. Grok Build là giao diện desktop độc lập sử dụng CLI chính thức qua ACP; không tuyên bố liên kết chính thức nếu chưa có xác nhận bằng văn bản.
