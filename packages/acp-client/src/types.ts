@@ -153,6 +153,8 @@ export type GrokEvent =
       kind?: string;
       locations?: ToolLocation[];
       diffs?: ToolDiff[];
+      /** Plain text / terminal snippets from tool content */
+      detail?: string;
     }
   | {
       type: "tool_update";
@@ -162,6 +164,7 @@ export type GrokEvent =
       kind?: string;
       locations?: ToolLocation[];
       diffs?: ToolDiff[];
+      detail?: string;
     }
   | {
       type: "permission_request";

@@ -17,6 +17,7 @@
     tool: 56,
     tool_group: 52,
     permission: 88,
+    activity: 32,
   };
 
   /**
@@ -31,15 +32,65 @@
    *   resolveMedia?: (src: string) => Promise<{url:string,path?:string,mimeType?:string,kind?:string}|null>,
    *   onMediaActivate?: (info: object) => void,
    *   onMediaContext?: (info: object, pos: {x:number,y:number}) => void,
+   *   onPathActivate?: (info: {path:string,label?:string}) => void,
+   *   onPathContext?: (info: {path:string,label?:string}, pos: {x:number,y:number}) => void,
    *   emptyTitle?: () => string,
    *   emptyBody?: () => string,
+   *   t?: (key: string, fallback?: string) => string,
    * }} opts
    */
   function createTimelineView(root, opts) {
     const store = opts.store;
     const off = globalThis.GrokOffthread;
     const md = globalThis.GrokMarkdown;
+    const pathLinks = globalThis.GrokPathLinks;
     const slash = globalThis.GrokSlashCommands;
+    const t = (key, fallback) => {
+      if (typeof opts.t === "function") {
+        const v = opts.t(key, fallback);
+        return v != null && v !== "" ? v : fallback || key;
+      }
+      return fallback || key;
+    };
+
+    function toolStatusLabel(status) {
+      const s = String(status || "done").toLowerCase();
+      if (s === "running") return t("toolStatusRunning", "running");
+      if (s === "pending") return t("toolStatusPending", "pending");
+      if (s === "failed" || s === "error") return t("toolStatusFailed", "failed");
+      if (s === "completed" || s === "done") return t("toolStatusCompleted", "done");
+      return status || "";
+    }
+
+    function toolGroupPreview(tools) {
+      const list = tools || [];
+      const running = list.some((x) => x.status === "running" || x.status === "pending");
+      const done = list.filter((x) => x.status === "completed" || x.status === "done").length;
+      const failed = list.filter((x) => x.status === "failed" || x.status === "error").length;
+      if (list.length <= 1) return list[0]?.title || t("labelTools", "Tools");
+      let s = t("toolsSteps", "{n} steps").replace("{n}", String(list.length));
+      if (running) s += " · " + t("toolsRunningN", "{n} running").replace("{n}", String(list.filter((x) => x.status === "running" || x.status === "pending").length));
+      else if (failed) s += " · " + t("toolsFailedN", "{n} failed").replace("{n}", String(failed));
+      else if (done) s += " · " + t("toolsDoneN", "{n} done").replace("{n}", String(done));
+      return s;
+    }
+
+    function thoughtTitle(item) {
+      if (item.streaming) return t("phaseThinking", "Thinking");
+      const duration = item.meta?.durationLabel;
+      if (duration) {
+        return t("thoughtFor", "Thought for {t}").replace("{t}", duration);
+      }
+      if (item.meta?.persisted) {
+        const preview = String(item.text || "")
+          .replace(/```[\s\S]*?```/g, " ")
+          .replace(/[*_`#>\[\]]/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (preview) return preview.length > 96 ? `${preview.slice(0, 95).trimEnd()}…` : preview;
+      }
+      return t("labelThinking", "Thinking");
+    }
 
     root.classList.add("timeline", "tl-virtual");
     root.innerHTML = `
@@ -55,32 +106,92 @@
     const nodeMap = new Map();
     /** @type {Map<number, number>} */
     const heightCache = new Map();
+    /** @type {Map<number, number>} async md generation tokens */
+    const mdGenMap = new Map();
     let stickToBottom = true;
     let renderScheduled = false;
     let disposed = false;
+    /** Prevent scroll-handler from treating programmatic bottom snaps as user leave */
+    let ignoreScrollUntil = 0;
+    let lastUserScrollTop = 0;
 
     function estimateHeight(item) {
       if (heightCache.has(item.id)) return heightCache.get(item.id);
       const base = EST[item.kind] || 48;
-      const lines = Math.ceil((item.text || "").length / 90);
-      return base + Math.min(400, Math.max(0, lines - 2) * 16);
+      const textLen = (item.text || "").length;
+      const lines = Math.ceil(textLen / 80);
+      // Open thought/tool groups are taller than collapsed chips
+      let openBoost = 0;
+      if (item.kind === "thought" && (item.streaming || item.meta?.open !== false)) {
+        openBoost = Math.min(240, 40 + Math.ceil(textLen / 60) * 14);
+      }
+      if (item.kind === "tool_group") {
+        const n = (item.meta?.tools || []).length || 1;
+        openBoost = n * 36;
+      }
+      return base + openBoost + Math.min(600, Math.max(0, lines - 2) * 15);
     }
 
     function measure(el, id) {
-      if (!el) return;
+      if (!el || el.hidden) return 0;
       const h = el.getBoundingClientRect().height;
-      if (h > 0) heightCache.set(id, h);
+      if (h > 0) {
+        const prev = heightCache.get(id);
+        heightCache.set(id, h);
+        return prev != null && Math.abs(prev - h) > 2 ? h : h;
+      }
+      return 0;
     }
 
-    function isNearBottom() {
-      return root.scrollHeight - root.scrollTop - root.clientHeight < 80;
+    /** Strict: only re-stick when truly pinned to the end */
+    function isAtBottom() {
+      const gap = root.scrollHeight - root.scrollTop - root.clientHeight;
+      return gap <= 8;
     }
 
+    /**
+     * Scroll to latest content. force=true re-enables stick-to-bottom
+     * (user send / turn complete). force=false only follows if already stuck.
+     */
     function scrollEnd(force) {
+      if (force) stickToBottom = true;
       if (!force && !stickToBottom) return;
+      ignoreScrollUntil = performance.now() + 120;
       requestAnimationFrame(() => {
+        if (disposed) return;
         root.scrollTop = root.scrollHeight;
+        lastUserScrollTop = root.scrollTop;
       });
+    }
+
+    /** Capture first visible item so remeasure doesn't jump mid-read */
+    function captureScrollAnchor() {
+      if (stickToBottom) return null;
+      const items = store.items;
+      const top = root.scrollTop;
+      let acc = 0;
+      for (let i = 0; i < items.length; i++) {
+        const h = estimateHeight(items[i]);
+        if (acc + h > top + 1) {
+          return { id: items[i].id, offset: top - acc, index: i };
+        }
+        acc += h;
+      }
+      return null;
+    }
+
+    function restoreScrollAnchor(anchor) {
+      if (!anchor || stickToBottom) return;
+      const items = store.items;
+      let acc = 0;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].id === anchor.id) {
+          ignoreScrollUntil = performance.now() + 80;
+          root.scrollTop = Math.max(0, acc + anchor.offset);
+          return;
+        }
+        acc += estimateHeight(items[i]);
+      }
     }
 
     function escapeHtml(s) {
@@ -383,41 +494,208 @@
       const text = item.text || "";
       if (!text) {
         el.textContent = "";
+        el.classList.remove("md-streaming", "md-structured");
         return;
       }
-      // Streaming: plain/fast path to avoid markdown thrash every frame
+
+      // Live stream: plain text + pre-wrap (CLI-like). Avoid MD thrash every frame.
       if (item.streaming || !structured) {
-        el.classList.add("md-body");
+        // Cancel any in-flight structured render for this node
+        mdGenMap.set(item.id, (mdGenMap.get(item.id) || 0) + 1);
+        el.classList.add("md-body", "md-streaming");
         el.classList.remove("md-structured");
-        // Light markdown only when idle stream chunks are large-ish
-        if (!item.streaming && md?.setStructuredContent) {
-          md.setStructuredContent(el, text, opts.openExternal);
-          hydrateImages(el);
-          mountMediaStrip(el, item);
-        } else {
+        delete el.dataset.mdPending;
+        // Only rewrite when text actually changed (reduces layout thrash / flicker)
+        if (el.dataset.streamText !== text) {
+          el.dataset.streamText = text;
           el.textContent = text;
         }
+        heightCache.delete(item.id);
         return;
       }
-      if (off?.renderMarkdownHtml) {
-        const gen = item.id;
-        el.dataset.mdPending = "1";
-        off.renderMarkdownHtml(text).then((html) => {
-          if (disposed || el.dataset.itemId !== String(gen)) return;
-          delete el.dataset.mdPending;
-          off.applyStructuredHtml(el, html, opts.openExternal);
-          hydrateImages(el);
-          mountMediaStrip(el, item);
-          measure(el, item.id);
+
+      // Final answer: keep plain/pre-wrap visible until MD HTML is ready
+      // (prevents empty flash, newline collapse, and race rewrites).
+      delete el.dataset.streamText;
+      const gen = (mdGenMap.get(item.id) || 0) + 1;
+      mdGenMap.set(item.id, gen);
+
+      const applyFinal = (applyFn) => {
+        if (disposed || el.dataset.itemId !== String(item.id)) return;
+        if (mdGenMap.get(item.id) !== gen) return;
+        delete el.dataset.mdPending;
+        el.classList.remove("md-streaming");
+        applyFn();
+        pathLinks?.hydrate?.(el, {
+          onActivate: opts.onPathActivate,
+          onContext: opts.onPathContext,
         });
-      } else if (md?.setStructuredContent) {
-        md.setStructuredContent(el, text, opts.openExternal);
         hydrateImages(el);
         mountMediaStrip(el, item);
+        measure(el, item.id);
+        if (stickToBottom) scrollEnd(false);
+      };
+
+      if (off?.renderMarkdownHtml) {
+        // Seed plain so node is never empty while worker runs
+        if (!el.classList.contains("md-structured")) {
+          el.classList.add("md-body", "md-streaming");
+          if (el.textContent !== text) el.textContent = text;
+        }
+        el.dataset.mdPending = "1";
+        off.renderMarkdownHtml(text).then((html) => {
+          applyFinal(() => {
+            off.applyStructuredHtml(el, html, opts.openExternal);
+          });
+        });
+      } else if (md?.setStructuredContent) {
+        applyFinal(() => {
+          md.setStructuredContent(el, text, opts.openExternal);
+        });
       } else {
+        el.classList.remove("md-streaming");
         el.textContent = text;
+        pathLinks?.hydrate?.(el, {
+          onActivate: opts.onPathActivate,
+          onContext: opts.onPathContext,
+        });
         mountMediaStrip(el, item);
       }
+    }
+
+    /**
+     * Simple red/green line view for edit diffs (CLI-style).
+     * @param {HTMLElement} host
+     * @param {string} [oldText]
+     * @param {string} [newText]
+     * @param {string} [path]
+     */
+    function renderCliDiff(host, oldText, newText, path) {
+      const wrap = document.createElement("div");
+      wrap.className = "cli-diff";
+      if (path) {
+        const head = document.createElement("div");
+        head.className = "cli-diff-path";
+        head.textContent = path.replace(/\\/g, "/").split("/").pop() || path;
+        head.title = path;
+        head.onclick = (ev) => {
+          ev.preventDefault();
+          opts.onReview?.({ path, oldText, newText });
+        };
+        wrap.appendChild(head);
+      }
+      const pre = document.createElement("pre");
+      pre.className = "cli-diff-pre";
+      const a = String(oldText ?? "").split(/\r?\n/);
+      const b = String(newText ?? "").split(/\r?\n/);
+      // Prefer off-thread LCS when available later; fast path for UI: show del then add
+      // If both empty, skip
+      if (!a.length && !b.length) return;
+      const HD = globalThis.GrokDiffHunks;
+      let rows = null;
+      if (HD?.groupHunks && (oldText != null || newText != null)) {
+        // Use lineDiff if rows not precomputed — lightweight local LCS for small files
+        try {
+          // sync coarse: mark all old as del, all new as add when huge
+          if (a.length * b.length > 80_000) {
+            rows = [
+              ...a.slice(0, 80).map((l) => ({ t: "del", l })),
+              ...b.slice(0, 80).map((l) => ({ t: "add", l })),
+            ];
+          }
+        } catch {
+          rows = null;
+        }
+      }
+      if (!rows) {
+        // Minimal: show unified context by index alignment when lengths small
+        rows = [];
+        const n = Math.max(a.length, b.length);
+        if (n <= 200 && a.length && b.length) {
+          // greedy: output dels for lines only in old prefix then adds
+          const maxShow = 120;
+          for (let i = 0; i < a.length && rows.length < maxShow; i++) {
+            if (b[i] !== a[i]) {
+              if (a[i] !== undefined) rows.push({ t: "del", l: a[i] });
+              if (b[i] !== undefined) rows.push({ t: "add", l: b[i] });
+            } else {
+              rows.push({ t: "ctx", l: a[i] });
+            }
+          }
+          for (let i = a.length; i < b.length && rows.length < maxShow; i++) {
+            rows.push({ t: "add", l: b[i] });
+          }
+        } else {
+          for (const l of a.slice(0, 60)) rows.push({ t: "del", l });
+          for (const l of b.slice(0, 60)) rows.push({ t: "add", l });
+        }
+      }
+      for (const r of rows.slice(0, 160)) {
+        const line = document.createElement("div");
+        line.className =
+          r.t === "add" ? "cli-diff-add" : r.t === "del" ? "cli-diff-del" : "cli-diff-ctx";
+        const mark = r.t === "add" ? "+" : r.t === "del" ? "−" : " ";
+        line.textContent = `${mark} ${r.l}`;
+        pre.appendChild(line);
+      }
+      wrap.appendChild(pre);
+      host.appendChild(wrap);
+    }
+
+    function fillToolBody(body, item) {
+      if (!body) return;
+      body.replaceChildren();
+      const detail = item.meta?.detail || "";
+      if (detail) {
+        const det = document.createElement("div");
+        det.className = "cli-tool-detail";
+        det.textContent = String(detail).slice(0, 2000);
+        body.appendChild(det);
+      }
+      const diffs = item.meta?.diffs?.length
+        ? item.meta.diffs
+        : item.meta?.path
+          ? [{ path: item.meta.path, oldText: item.meta.oldText, newText: item.meta.newText }]
+          : [];
+      for (const d of diffs.slice(0, 4)) {
+        if (d.newText != null || d.oldText != null) {
+          renderCliDiff(body, d.oldText, d.newText, d.path);
+        } else if (d.path) {
+          const p = document.createElement("button");
+          p.type = "button";
+          p.className = "cli-tool-path-btn";
+          p.textContent = d.path.replace(/\\/g, "/").split("/").pop() || d.path;
+          p.onclick = () => opts.onReview?.({ path: d.path, oldText: d.oldText, newText: d.newText });
+          body.appendChild(p);
+        }
+      }
+      if (!body.childNodes.length && item.meta?.path) {
+        const p = document.createElement("button");
+        p.type = "button";
+        p.className = "cli-tool-path-btn";
+        p.textContent = item.meta.path;
+        p.onclick = () =>
+          opts.onReview?.({
+            path: item.meta.path,
+            oldText: item.meta.oldText,
+            newText: item.meta.newText,
+          });
+        body.appendChild(p);
+      }
+    }
+
+    function buildToolInner(tool) {
+      const row = document.createElement("details");
+      row.className = "cli-tool nested";
+      const running = tool.status === "running" || tool.status === "pending";
+      row.open = running;
+      row.innerHTML = `<summary class="cli-line">
+        <span class="cli-mark" aria-hidden="true">${running ? "◆" : "◇"}</span>
+        <span class="cli-line-title"></span>
+      </summary><div class="cli-tool-body"></div>`;
+      row.querySelector(".cli-line-title").textContent = tool.title || t("labelTools", "Tools");
+      fillToolBody(row.querySelector(".cli-tool-body"), { meta: tool, text: tool.title });
+      return row;
     }
 
     function createNode(item) {
@@ -463,107 +741,71 @@
         bindAssistantContent(d, item, !item.streaming);
         return d;
       }
-      if (item.kind === "thought") {
-        const d = document.createElement("details");
-        d.className = "thought thought-card tl-item";
-        d.open = Boolean(item.meta?.open) || Boolean(item.streaming);
+      if (item.kind === "activity") {
+        // Live phase lives in #turnStatus footer (CLI-like); hide mid-timeline chips
+        const d = document.createElement("div");
+        d.className = "tl-item tl-hidden";
         d.dataset.itemId = String(item.id);
-        const preview = (item.text || "").slice(0, 80).replace(/\s+/g, " ");
-        d.innerHTML = `<summary><span class="thought-label">Thinking</span><span class="thought-preview">${escapeHtml(preview)}${(item.text || "").length > 80 ? "…" : ""}</span></summary><div class="body"></div>`;
+        d.hidden = true;
+        return d;
+      }
+      if (item.kind === "thought") {
+        // CLI: "◆ Thought for 1.8s" — expand to read stream
+        const d = document.createElement("details");
+        d.className = "cli-thought tl-item";
+        d.open = Boolean(item.streaming) || Boolean(item.meta?.open);
+        d.dataset.itemId = String(item.id);
+        const title = thoughtTitle(item);
+        d.innerHTML = `<summary class="cli-line">
+          <span class="cli-mark" aria-hidden="true">◆</span>
+          <span class="cli-line-title"></span>
+        </summary><div class="cli-thought-body body"></div>`;
+        d.querySelector(".cli-line-title").textContent = title;
         d.querySelector(".body").textContent = item.text || "";
         return d;
       }
       if (item.kind === "tool_group") {
+        // Legacy grouped tools (older sessions) — still render compact
         const d = document.createElement("details");
-        d.className = "tool-group thought-card tl-item";
+        d.className = "cli-tool-group tl-item";
         const tools = item.meta?.tools || [];
         const running = tools.some(
-          (t) => t.status === "running" || t.status === "pending",
+          (x) => x.status === "running" || x.status === "pending",
         );
-        d.open = item.meta?.open !== false && (running || Boolean(item.meta?.open));
-        if (item.meta?.closed && !running) d.open = false;
+        d.open = Boolean(item.meta?.open) || running;
         d.dataset.itemId = String(item.id);
-        const done = tools.filter((t) => t.status === "completed" || t.status === "done").length;
-        const failed = tools.filter((t) => t.status === "failed" || t.status === "error").length;
-        const preview =
-          tools.length <= 1
-            ? tools[0]?.title || "Tool"
-            : `${tools.length} steps` +
-              (running ? " · running" : failed ? ` · ${failed} failed` : done ? ` · ${done} done` : "");
-        d.innerHTML = `<summary class="tool-group-sum">
-          <span class="tool-status" data-status="${running ? "running" : failed ? "failed" : "completed"}"></span>
-          <span class="thought-label">Tools</span>
-          <span class="thought-preview">${escapeHtml(preview)}</span>
-        </summary><div class="tool-group-body"></div>`;
-        const body = d.querySelector(".tool-group-body");
-        for (const t of tools) {
-          const row = document.createElement("div");
-          row.className = "tool-group-row";
-          row.innerHTML = `
-            <span class="tool-status" data-status="${escapeHtml(t.status || "done")}"></span>
-            <span class="tool-group-row-title">${escapeHtml(t.title || "Tool")}</span>
-            <span class="tool-status-text">${escapeHtml(t.status || "")}</span>`;
-          if (t.path) {
-            const rev = document.createElement("button");
-            rev.type = "button";
-            rev.className = "review-btn tool-review-btn";
-            rev.textContent = "Review";
-            rev.onclick = (ev) => {
-              ev.preventDefault();
-              ev.stopPropagation();
-              opts.onReview?.({
-                path: t.path,
-                oldText: t.oldText,
-                newText: t.newText,
-              });
-            };
-            row.appendChild(rev);
-          }
-          if (t.detail) {
-            const det = document.createElement("div");
-            det.className = "tool-group-row-detail";
-            det.textContent = String(t.detail).slice(0, 400);
-            row.appendChild(det);
-          }
-          body.appendChild(row);
+        d.innerHTML = `<summary class="cli-line">
+          <span class="cli-mark" aria-hidden="true">◇</span>
+          <span class="cli-line-title"></span>
+        </summary><div class="cli-tool-group-body"></div>`;
+        d.querySelector(".cli-line-title").textContent = toolGroupPreview(tools);
+        const body = d.querySelector(".cli-tool-group-body");
+        for (const tool of tools) {
+          body.appendChild(buildToolInner(tool));
         }
-        d.addEventListener("toggle", () => {
-          // keep user open/closed preference in store if possible via nothing — local only
-        });
         return d;
       }
       if (item.kind === "tool") {
-        // Legacy single tool card (history) — keep compact closed when done
+        // CLI: "◇ Read 3 files" / "Edit path" — expand for detail + red/green diff
         const d = document.createElement("details");
-        d.className = "tool-card tl-item";
-        d.open = item.meta?.status === "running" || item.meta?.status === "pending";
-        d.dataset.itemId = String(item.id);
         const status = item.meta?.status || "done";
-        const title = item.text || item.meta?.title || "Tool";
-        const kind = item.meta?.kind || "";
-        d.innerHTML = `
-          <summary class="tool-card-sum">
-            <span class="tool-status" data-status="${escapeHtml(status)}"></span>
-            <span class="tool-title">${escapeHtml(title)}</span>
-            ${kind ? `<span class="tool-kind">${escapeHtml(kind)}</span>` : ""}
-            <span class="tool-status-text">${escapeHtml(status)}</span>
-          </summary>
-          <div class="tool-card-body">${escapeHtml(item.meta?.detail || "")}</div>`;
-        if (item.meta?.path) {
-          const rev = document.createElement("button");
-          rev.type = "button";
-          rev.className = "review-btn tool-review-btn";
-          rev.textContent = "Review";
-          rev.onclick = (ev) => {
-            ev.preventDefault();
-            opts.onReview?.({
-              path: item.meta.path,
-              oldText: item.meta.oldText,
-              newText: item.meta.newText,
-            });
-          };
-          d.querySelector(".tool-card-body")?.appendChild(rev);
+        const running = status === "running" || status === "pending";
+        d.className = "cli-tool tl-item";
+        d.open = Boolean(item.meta?.open) || running;
+        d.dataset.itemId = String(item.id);
+        d.dataset.status = status;
+        const title = item.text || item.meta?.title || t("labelTools", "Tools");
+        d.innerHTML = `<summary class="cli-line">
+          <span class="cli-mark${running ? " spin-dot" : ""}" aria-hidden="true">${running ? "◆" : "◇"}</span>
+          <span class="cli-line-title"></span>
+          <span class="cli-line-meta"></span>
+        </summary><div class="cli-tool-body"></div>`;
+        d.querySelector(".cli-line-title").textContent = title;
+        const metaEl = d.querySelector(".cli-line-meta");
+        if (metaEl && !running && status !== "completed" && status !== "done") {
+          metaEl.textContent = toolStatusLabel(status);
         }
+        fillToolBody(d.querySelector(".cli-tool-body"), item);
         return d;
       }
       if (item.kind === "permission") {
@@ -571,17 +813,17 @@
         d.className = "perm-card tl-item";
         d.dataset.itemId = String(item.id);
         const resolved = Boolean(item.meta?.resolved);
-        const title = item.text || "Permission required";
+        const title = item.text || t("phasePermission", "Waiting for permission");
         d.innerHTML = `
           <div class="perm-card-head">
-            <span class="perm-badge">Permission</span>
+            <span class="perm-badge">${escapeHtml(t("labelPermission", "Permission"))}</span>
             <strong class="perm-title">${escapeHtml(title)}</strong>
             ${item.meta?.kind ? `<span class="perm-kind">${escapeHtml(item.meta.kind)}</span>` : ""}
           </div>
           <div class="perm-card-actions"></div>`;
         const actions = d.querySelector(".perm-card-actions");
         if (resolved) {
-          actions.innerHTML = `<span class="perm-resolved">${escapeHtml(item.meta?.resultLabel || "Resolved")}</span>`;
+          actions.innerHTML = `<span class="perm-resolved">${escapeHtml(item.meta?.resultLabel || t("labelResolved", "Resolved"))}</span>`;
         } else {
           for (const opt of item.meta?.options || []) {
             const b = document.createElement("button");
@@ -594,7 +836,7 @@
           const cancel = document.createElement("button");
           cancel.type = "button";
           cancel.className = "perm-btn ghost";
-          cancel.textContent = "Cancel";
+          cancel.textContent = t("cancel", "Cancel");
           cancel.onclick = () => opts.onPermission?.(item.meta.requestId, "__cancel__");
           actions.appendChild(cancel);
         }
@@ -621,11 +863,15 @@
         const path = String(item.meta?.path || item.text || "");
         const basen = path.replace(/\\/g, "/").split("/").pop() || path;
         const count = item.meta?.editCount || 1;
-        d.innerHTML = `<span><strong>${count} file</strong> · ${escapeHtml(basen)}</span>`;
+        const fileLabel =
+          count === 1
+            ? t("reviewFiles", "{n} file").replace("{n}", String(count))
+            : t("reviewFilesPlural", "{n} files").replace("{n}", String(count));
+        d.innerHTML = `<span><strong>${escapeHtml(fileLabel)}</strong> · ${escapeHtml(basen)}</span>`;
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "review-btn";
-        btn.textContent = "Review";
+        btn.textContent = t("review", "Review");
         btn.onclick = () => opts.onReview?.(item.meta || {});
         d.appendChild(btn);
         return d;
@@ -651,39 +897,149 @@
       return d;
     }
 
+    function patchToolGroup(el, item) {
+      const tools = item.meta?.tools || [];
+      const running = tools.some(
+        (x) => x.status === "running" || x.status === "pending",
+      );
+      const failed = tools.some((x) => x.status === "failed" || x.status === "error");
+      const preview = toolGroupPreview(tools);
+      const labelEl = el.querySelector(".tool-group-sum .thought-label");
+      if (labelEl) labelEl.textContent = t("labelTools", "Tools");
+      const prevEl = el.querySelector(".thought-preview");
+      if (prevEl) prevEl.textContent = preview;
+      const sumStatus = el.querySelector(".tool-group-sum .tool-status");
+      if (sumStatus) {
+        sumStatus.dataset.status = running ? "running" : failed ? "failed" : "completed";
+      }
+      // Respect user collapse when tools finished; keep open while running
+      if (running) el.open = true;
+      else if (item.meta?.closed) el.open = false;
+      else if (item.meta?.open === false) el.open = false;
+
+      const body = el.querySelector(".tool-group-body");
+      if (!body) {
+        const fresh = createNode(item);
+        el.replaceWith(fresh);
+        nodeMap.set(item.id, fresh);
+        return;
+      }
+      // In-place row update — avoid full replaceWith (causes layout jump / overlap)
+      body.replaceChildren();
+      for (const tool of tools) {
+        const row = document.createElement("div");
+        row.className = "tool-group-row";
+        row.innerHTML = `
+            <span class="tool-status" data-status="${escapeHtml(tool.status || "done")}"></span>
+            <span class="tool-group-row-title">${escapeHtml(tool.title || t("labelTools", "Tools"))}</span>
+            <span class="tool-status-text">${escapeHtml(toolStatusLabel(tool.status))}</span>`;
+        if (tool.path) {
+          const rev = document.createElement("button");
+          rev.type = "button";
+          rev.className = "review-btn tool-review-btn";
+          rev.textContent = t("review", "Review");
+          rev.onclick = (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            opts.onReview?.({
+              path: tool.path,
+              oldText: tool.oldText,
+              newText: tool.newText,
+            });
+          };
+          row.appendChild(rev);
+        }
+        if (tool.detail) {
+          const det = document.createElement("div");
+          det.className = "tool-group-row-detail";
+          det.textContent = String(tool.detail).slice(0, 400);
+          row.appendChild(det);
+        }
+        body.appendChild(row);
+      }
+      heightCache.delete(item.id);
+    }
+
+    function patchActivity(el, item) {
+      const phase = item.meta?.phase || "waiting";
+      const active = item.meta?.active !== false && phase !== "done" && phase !== "error";
+      el.dataset.phase = phase;
+      el.classList.toggle("is-active", active);
+      el.classList.toggle("is-done", !active);
+      const icon = el.querySelector(".activity-icon");
+      if (icon) {
+        icon.classList.toggle("spin", active);
+        icon.classList.toggle("ok", !active && phase !== "error");
+        icon.classList.toggle("err", phase === "error");
+      }
+      const label = el.querySelector(".activity-label");
+      if (label) label.textContent = item.text || t("phaseWaiting", "Waiting for response");
+      const elapsed = el.querySelector(".activity-elapsed");
+      if (elapsed) elapsed.textContent = item.meta?.elapsedLabel || "";
+    }
+
     function updateNode(el, item) {
+      if (item.kind === "activity") {
+        patchActivity(el, item);
+        return;
+      }
       if (item.kind === "assistant") {
         bindAssistantContent(el, item, !item.streaming);
         return;
       }
       if (item.kind === "thought") {
         const body = el.querySelector(".body");
-        if (body) body.textContent = item.text || "";
-        const preview = el.querySelector(".thought-preview");
-        if (preview) {
-          const p = (item.text || "").slice(0, 80).replace(/\s+/g, " ");
-          preview.textContent = p + ((item.text || "").length > 80 ? "…" : "");
+        if (body) {
+          const txt = item.text || "";
+          if (body.dataset.streamText !== txt) {
+            body.dataset.streamText = txt;
+            body.textContent = txt;
+          }
+          if (item.streaming && stickToBottom) {
+            body.scrollTop = body.scrollHeight;
+          }
+        }
+        const titleEl = el.querySelector(".cli-line-title");
+        if (titleEl) {
+          titleEl.textContent = thoughtTitle(item);
         }
         if (item.streaming) el.open = true;
+        else if (item.meta?.open === false) el.open = false;
+        heightCache.delete(item.id);
         return;
       }
       if (item.kind === "tool_group") {
-        // Rebuild group body (tool list changes often)
+        // Rebuild legacy group
         const fresh = createNode(item);
         el.replaceWith(fresh);
         nodeMap.set(item.id, fresh);
         return;
       }
       if (item.kind === "tool") {
-        const st = el.querySelector(".tool-status");
-        const stt = el.querySelector(".tool-status-text");
-        const title = el.querySelector(".tool-title");
-        if (st) st.dataset.status = item.meta?.status || "done";
-        if (stt) stt.textContent = item.meta?.status || "done";
-        if (title) title.textContent = item.text || item.meta?.title || "Tool";
+        const status = item.meta?.status || "done";
+        const running = status === "running" || status === "pending";
+        el.dataset.status = status;
+        const mark = el.querySelector(".cli-mark");
+        if (mark) {
+          mark.textContent = running ? "◆" : "◇";
+          mark.classList.toggle("spin-dot", running);
+        }
+        const title = el.querySelector(".cli-line-title");
+        if (title) title.textContent = item.text || item.meta?.title || t("labelTools", "Tools");
+        const metaEl = el.querySelector(".cli-line-meta");
+        if (metaEl) {
+          metaEl.textContent =
+            !running && status !== "completed" && status !== "done"
+              ? toolStatusLabel(status)
+              : "";
+        }
+        if (running) el.open = true;
+        else if (item.meta?.open === false) el.open = false;
+        fillToolBody(el.querySelector(".cli-tool-body"), item);
+        heightCache.delete(item.id);
         return;
       }
-      if (item.kind === "permission" || item.kind === "tool") {
+      if (item.kind === "permission") {
         const fresh = createNode(item);
         el.replaceWith(fresh);
         nodeMap.set(item.id, fresh);
@@ -746,11 +1102,16 @@
       return { start, end, top, bottom, full: false };
     }
 
+    let remeasurePasses = 0;
+
     function render() {
       if (disposed) return;
       renderScheduled = false;
       const items = store.items;
       const range = visibleRange();
+      // Only anchor when virtualized — full mount uses real DOM scroll positions
+      const anchor = range.full ? null : captureScrollAnchor();
+      const prevScrollTop = root.scrollTop;
 
       spacerTop.style.height = range.full ? "0px" : `${range.top}px`;
       spacerBottom.style.height = range.full ? "0px" : `${range.bottom}px`;
@@ -758,6 +1119,10 @@
       const want = new Set();
       for (let i = range.start; i < range.end; i++) {
         want.add(items[i].id);
+      }
+      // Always keep live streams mounted even if estimate put them off-window
+      for (const sid of [store.streamAssistantId, store.streamThoughtId]) {
+        if (sid != null) want.add(sid);
       }
 
       // Remove off-window nodes
@@ -777,8 +1142,6 @@
         if (!el) {
           el = createNode(item);
           nodeMap.set(item.id, el);
-        } else if (item.streaming || item.kind === "assistant" || item.kind === "thought") {
-          // stream updates handled separately; still ok
         }
         ordered.push(el);
       }
@@ -797,12 +1160,35 @@
         windowEl.replaceChildren(frag);
       }
 
+      let heightsChanged = false;
       for (const el of ordered) {
         const id = Number(el.dataset.itemId);
-        measure(el, id);
+        const prev = heightCache.get(id);
+        const h = measure(el, id);
+        if (prev != null && h > 0 && Math.abs(prev - h) > 4) heightsChanged = true;
       }
 
-      if (stickToBottom) scrollEnd(true);
+      if (stickToBottom) {
+        scrollEnd(false);
+      } else if (anchor) {
+        restoreScrollAnchor(anchor);
+      } else {
+        // Full mount: preserve exact scroll position (content may grow below)
+        if (root.scrollTop !== prevScrollTop) {
+          ignoreScrollUntil = performance.now() + 40;
+          root.scrollTop = prevScrollTop;
+        }
+      }
+
+      // One corrective pass when measured heights diverge from spacer math
+      if (heightsChanged && !range.full && !stickToBottom && remeasurePasses < 2) {
+        remeasurePasses += 1;
+        requestAnimationFrame(() => {
+          if (!disposed) scheduleRender();
+        });
+      } else {
+        remeasurePasses = 0;
+      }
     }
 
     function scheduleRender() {
@@ -819,10 +1205,8 @@
       }
       updateNode(el, item);
       measure(el, item.id);
-      if (stickToBottom || isNearBottom()) {
-        stickToBottom = true;
-        scrollEnd(true);
-      }
+      // Follow live output ONLY if still stuck — never auto re-stick mid-scroll
+      if (stickToBottom) scrollEnd(false);
     }
 
     function finalizeItem(item) {
@@ -830,25 +1214,34 @@
       if (el && item.kind === "assistant") {
         bindAssistantContent(el, item, true);
         measure(el, item.id);
+      } else if (el && item.kind === "thought") {
+        // Collapse thought body like CLI after stream ends (title keeps "Thought for Xs")
+        if (item.meta?.open !== true) el.open = false;
+        updateNode(el, item);
+        measure(el, item.id);
       } else if (el) {
         updateNode(el, item);
+        measure(el, item.id);
       } else {
         scheduleRender();
       }
-      if (stickToBottom) scrollEnd(true);
+      if (stickToBottom) scrollEnd(false);
     }
 
     const unsub = store.subscribe((change) => {
       if (change.type === "reset") {
         nodeMap.clear();
         heightCache.clear();
+        mdGenMap.clear();
         windowEl.replaceChildren();
         stickToBottom = true;
         scheduleRender();
         return;
       }
-      if (change.type === "append") {
+      if (change.type === "append" || change.type === "reorder") {
         scheduleRender();
+        // Soft follow: new rows while stuck at bottom
+        if (stickToBottom) scrollEnd(false);
         return;
       }
       if (change.type === "stream" && change.item) {
@@ -862,18 +1255,49 @@
       }
       if (change.type === "update" && change.item) {
         const el = nodeMap.get(change.item.id);
-        if (el) updateNode(el, change.item);
-        else scheduleRender();
-        measure(nodeMap.get(change.item.id), change.item.id);
-        // Tool groups grow in place — keep stick-to-bottom so final answer stays visible
-        if (stickToBottom) scrollEnd(true);
+        if (el) {
+          updateNode(el, change.item);
+          // Activity timer ticks must NOT force scroll; only growing content does
+          if (change.item.kind !== "activity") {
+            measure(el, change.item.id);
+            if (stickToBottom) scrollEnd(false);
+          }
+        } else {
+          scheduleRender();
+        }
       }
     });
+
+    // Intent to read history: wheel up immediately unsticks (don't wait for scroll gap)
+    root.addEventListener(
+      "wheel",
+      (e) => {
+        if (e.deltaY < 0) {
+          stickToBottom = false;
+          ignoreScrollUntil = 0;
+        } else if (e.deltaY > 0 && isAtBottom()) {
+          stickToBottom = true;
+        }
+      },
+      { passive: true },
+    );
 
     root.addEventListener(
       "scroll",
       () => {
-        stickToBottom = isNearBottom();
+        // Ignore scroll events caused by our own scrollTop assignment
+        if (performance.now() < ignoreScrollUntil) {
+          lastUserScrollTop = root.scrollTop;
+          return;
+        }
+        const top = root.scrollTop;
+        // Any meaningful upward scroll = leave live tail
+        if (top + 2 < lastUserScrollTop) {
+          stickToBottom = false;
+        } else if (isAtBottom()) {
+          stickToBottom = true;
+        }
+        lastUserScrollTop = top;
         if (store.length >= VIRTUAL_THRESHOLD) scheduleRender();
       },
       { passive: true },
@@ -881,14 +1305,25 @@
 
     return {
       render: scheduleRender,
-      scrollEnd: () => {
-        stickToBottom = true;
-        scrollEnd(true);
+      /**
+       * @param {boolean} [force=true] When true, re-enable stick-to-bottom (send / turn end).
+       *   When false, only scroll if the user is already following the live tail.
+       */
+      scrollEnd: (force = true) => {
+        scrollEnd(force !== false);
+      },
+      isStickToBottom: () => stickToBottom,
+      /** Rebuild mounted nodes (e.g. after language switch). */
+      relocalize() {
+        for (const [, el] of nodeMap) el.remove();
+        nodeMap.clear();
+        scheduleRender();
       },
       dispose() {
         disposed = true;
         unsub();
         nodeMap.clear();
+        mdGenMap.clear();
       },
     };
   }

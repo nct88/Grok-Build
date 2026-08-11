@@ -42,22 +42,22 @@ try {
       viewport: { width: innerWidth, height: innerHeight },
       conversation: rect(".conversation"),
       editor: rect(".editor-pane"),
+      editorDisplay: getComputedStyle(document.querySelector(".editor-pane")).display,
+      panelToggleDisplay: getComputedStyle(document.querySelector("#btnTogglePanel")).display,
       title: rect(".conv-title"),
       actions: rect(".conv-actions"),
       composer: rect(".composer"),
       horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
-      overlayMode: getComputedStyle(document.querySelector(".editor-pane")).position === "absolute",
     };
   });
 
   const failures = [];
   if (geometry.viewport.width < 990 || geometry.viewport.height < 600) failures.push(`unexpected viewport ${geometry.viewport.width}x${geometry.viewport.height}`);
-  if (!geometry.overlayMode) failures.push("right tools pane is not in compact overlay mode");
+  if (geometry.editorDisplay !== "none" || geometry.editor?.width !== 0) failures.push(`right tools pane remains visible: ${JSON.stringify(geometry.editor)}`);
+  if (geometry.panelToggleDisplay !== "none") failures.push(`right panel toggle remains visible: ${geometry.panelToggleDisplay}`);
   if (!geometry.conversation || geometry.conversation.width < 620) failures.push(`conversation too narrow: ${geometry.conversation?.width}`);
   if (!geometry.composer || geometry.composer.width < 580) failures.push(`composer too narrow: ${geometry.composer?.width}`);
   if (geometry.title && geometry.actions && geometry.title.right > geometry.actions.left + 1) failures.push("conversation title overlaps header actions");
-  if (geometry.editor && geometry.actions && geometry.editor.top < geometry.actions.bottom - 1) failures.push("tools drawer covers header actions");
-  if (geometry.editor && geometry.composer && geometry.editor.bottom > geometry.composer.top + 1) failures.push("tools drawer covers composer");
   if (geometry.horizontalOverflow) failures.push("desktop has horizontal overflow");
   if (geometry.composer?.bottom > geometry.viewport.height + 1) failures.push("composer is outside viewport");
 

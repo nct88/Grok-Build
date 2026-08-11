@@ -4,12 +4,14 @@
  */
 (() => {
   /**
-   * @param {{ intervalMs?: number, onFlush: (pending: { assistant: string, thought: string }) => void }} opts
+   * @param {{ intervalMs?: number, onFlush: (pending: { assistant: string, thought: string, segments: Array<{kind:"assistant"|"thought",text:string}> }) => void }} opts
    */
   function createStreamBatcher(opts) {
     const intervalMs = opts.intervalMs ?? 40;
     let pendingAssistant = "";
     let pendingThought = "";
+    /** @type {Array<{kind:"assistant"|"thought",text:string}>} */
+    let pendingSegments = [];
     let timer = 0;
     let raf = 0;
     let closed = false;
@@ -40,10 +42,19 @@
       const payload = {
         assistant: pendingAssistant,
         thought: pendingThought,
+        segments: pendingSegments,
       };
       pendingAssistant = "";
       pendingThought = "";
+      pendingSegments = [];
       opts.onFlush(payload);
+    }
+
+    /** @param {"assistant"|"thought"} kind @param {string} chunk */
+    function pushSegment(kind, chunk) {
+      const last = pendingSegments[pendingSegments.length - 1];
+      if (last?.kind === kind) last.text += chunk;
+      else pendingSegments.push({ kind, text: chunk });
     }
 
     return {
@@ -51,13 +62,19 @@
       pushAssistant(chunk) {
         if (!chunk) return;
         pendingAssistant += chunk;
+        pushSegment("assistant", chunk);
         schedule();
       },
       /** @param {string} chunk */
       pushThought(chunk) {
         if (!chunk) return;
         pendingThought += chunk;
+        pushSegment("thought", chunk);
         schedule();
+      },
+      /** @param {"assistant"|"thought"} kind */
+      hasPending(kind) {
+        return pendingSegments.some((segment) => segment.kind === kind && segment.text);
       },
       /** Force immediate flush (turn end, disconnect). */
       flushNow() {
@@ -74,6 +91,7 @@
       clear() {
         pendingAssistant = "";
         pendingThought = "";
+        pendingSegments = [];
         if (timer) {
           clearTimeout(timer);
           timer = 0;

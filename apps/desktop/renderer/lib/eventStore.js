@@ -6,7 +6,7 @@
   let seq = 1;
 
   /**
-   * @typedef {"user"|"assistant"|"thought"|"step"|"error"|"review"|"foot"|"empty"} ItemKind
+   * @typedef {"user"|"assistant"|"thought"|"step"|"error"|"review"|"foot"|"empty"|"activity"|"tool"|"tool_group"|"permission"} ItemKind
    * @typedef {{ id: number, kind: ItemKind, text: string, meta: Record<string, unknown>, ts: number, streaming?: boolean }} StoreItem
    */
 
@@ -184,6 +184,19 @@
         return item;
       },
 
+      /**
+       * Move an item to the end (live activity status follows the turn tail).
+       * @param {number} id
+       */
+      bringToEnd(id) {
+        const idx = items.findIndex((it) => it.id === id);
+        if (idx < 0 || idx === items.length - 1) return getById(id);
+        const [item] = items.splice(idx, 1);
+        items.push(item);
+        emit({ type: "reorder", item });
+        return item;
+      },
+
       /** Find first item matching predicate (reverse search). */
       findLast(pred) {
         for (let i = items.length - 1; i >= 0; i--) {
@@ -206,7 +219,7 @@
 
       /**
        * Replace store from transcript turns (history load).
-       * @param {Array<{ role: string, text: string }>} turns
+       * @param {Array<{ role: string, text: string, messageId?: string, status?: string }>} turns
        */
       loadTurns(turns) {
         items.length = 0;
@@ -228,6 +241,20 @@
               kind: "assistant",
               text: String(t.text || ""),
               meta: {},
+              ts: Date.now(),
+              streaming: false,
+            });
+          } else if (t.role === "thought") {
+            items.push({
+              id: seq++,
+              kind: "thought",
+              text: String(t.text || ""),
+              meta: {
+                persisted: true,
+                open: false,
+                ...(t.messageId ? { messageId: String(t.messageId) } : {}),
+                ...(t.status ? { status: String(t.status) } : {}),
+              },
               ts: Date.now(),
               streaming: false,
             });

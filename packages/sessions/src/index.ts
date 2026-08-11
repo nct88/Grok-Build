@@ -49,6 +49,21 @@ function extractText(
   return content.map((p) => (typeof p?.text === "string" ? p.text : "")).filter(Boolean).join("\n");
 }
 
+/**
+ * Grok CLI persists display-safe reasoning summaries separately from the
+ * encrypted internal payload. Only summary_text is allowed across UI IPC.
+ */
+function extractReasoningSummary(
+  summary: ReasoningSummaryPart[] | null | undefined,
+): string {
+  if (!Array.isArray(summary)) return "";
+  return summary
+    .filter((part) => part?.type === "summary_text" && typeof part.text === "string")
+    .map((part) => part.text!.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 function titleFromUserMessageText(raw: string): string | undefined {
   const text = raw.trim();
   if (!text) return undefined;
@@ -189,8 +204,15 @@ export async function listLocalSessions(options: {
 }
 
 export interface TranscriptMessage {
-  role: "user" | "assistant" | "system" | "other";
+  role: "user" | "assistant" | "thought" | "system" | "other";
   text: string;
+  messageId?: string;
+  status?: string;
+}
+
+interface ReasoningSummaryPart {
+  type?: string;
+  text?: string;
 }
 
 /**
@@ -210,7 +232,7 @@ export async function readSessionTranscript(options: {
 
   const historyPath = join(sessionDir, "chat_history.jsonl");
   const out: TranscriptMessage[] = [];
-  const limit = options.limit ?? 200;
+  const limit = Math.max(1, options.limit ?? 200);
   try {
     const stream = createReadStream(historyPath, { encoding: "utf8" });
     const rl = createInterface({ input: stream, crlfDelay: Infinity });
@@ -223,6 +245,9 @@ export async function readSessionTranscript(options: {
           role?: string;
           content?: string | Array<{ type?: string; text?: string }>;
           synthetic_reason?: string;
+          id?: string;
+          status?: string;
+          summary?: ReasoningSummaryPart[] | null;
         };
         try {
           row = JSON.parse(trimmed);
@@ -230,7 +255,19 @@ export async function readSessionTranscript(options: {
           continue;
         }
         const type = (row.type || row.role || "").toLowerCase();
-        if (type === "system" || type === "reasoning") continue;
+        if (type === "system") continue;
+        if (type === "reasoning") {
+          let text = extractReasoningSummary(row.summary).trim();
+          if (!text) continue;
+          if (text.length > 50_000) text = `${text.slice(0, 50_000)}\n…`;
+          out.push({
+            role: "thought",
+            text,
+            ...(row.id ? { messageId: row.id } : {}),
+            ...(row.status ? { status: row.status } : {}),
+          });
+          continue;
+        }
         if (row.synthetic_reason && row.synthetic_reason !== "user") {
           const text = extractText(row.content);
           if (!text.includes("<user_query>")) continue;
@@ -249,7 +286,6 @@ export async function readSessionTranscript(options: {
         if (text.includes("<system-reminder>") && text.length > 2000) continue;
         if (text.length > 50_000) text = `${text.slice(0, 50_000)}\n…`;
         out.push({ role, text });
-        if (out.length >= limit) break;
       }
     } finally {
       rl.close();
@@ -258,7 +294,13 @@ export async function readSessionTranscript(options: {
   } catch {
     return [];
   }
-  return out;
+  if (out.length <= limit) return out;
+
+  // Keep the newest items and include the user row that begins a partially
+  // selected turn so a resumed session never opens in the middle of thought.
+  let start = out.length - limit;
+  while (start > 0 && out[start]?.role !== "user") start -= 1;
+  return out.slice(start);
 }
 
 /** Locate a session folder by id under ~/.grok/sessions/<cwd>/<id>. */

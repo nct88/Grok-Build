@@ -32,6 +32,23 @@ function diffsFromContent(
   return diffs.length ? diffs : undefined;
 }
 
+/** Plain text / terminal snippets from tool content (for expandable CLI-like detail). */
+function textDetailFromContent(
+  content: acp.ToolCallContent[] | null | undefined,
+): string | undefined {
+  if (!content?.length) return undefined;
+  const parts: string[] = [];
+  for (const item of content) {
+    if (item.type === "content" && item.content?.type === "text" && item.content.text) {
+      parts.push(item.content.text);
+    } else if (item.type === "terminal" && "terminalId" in item) {
+      parts.push(`[terminal ${item.terminalId}]`);
+    }
+  }
+  const joined = parts.join("\n").trim();
+  return joined ? joined.slice(0, 4000) : undefined;
+}
+
 export function normalizeConfigOptions(
   options: acp.SessionConfigOption[] | null | undefined,
 ): Extract<GrokEvent, { type: "session_config" }> {
@@ -93,6 +110,7 @@ export function normalizeSessionUpdate(
     case "tool_call": {
       const locations = locationsFromUpdate(update.locations);
       const diffs = diffsFromContent(update.content);
+      const detail = textDetailFromContent(update.content);
       return {
         type: "tool",
         toolCallId: update.toolCallId,
@@ -101,11 +119,13 @@ export function normalizeSessionUpdate(
         ...(update.kind ? { kind: update.kind } : {}),
         ...(locations ? { locations } : {}),
         ...(diffs ? { diffs } : {}),
+        ...(detail ? { detail } : {}),
       };
     }
     case "tool_call_update": {
       const locations = locationsFromUpdate(update.locations);
       const diffs = diffsFromContent(update.content);
+      const detail = textDetailFromContent(update.content);
       return {
         type: "tool_update",
         toolCallId: update.toolCallId,
@@ -114,6 +134,7 @@ export function normalizeSessionUpdate(
         ...(update.kind ? { kind: update.kind } : {}),
         ...(locations ? { locations } : {}),
         ...(diffs ? { diffs } : {}),
+        ...(detail ? { detail } : {}),
       };
     }
     case "plan":

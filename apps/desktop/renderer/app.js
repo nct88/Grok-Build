@@ -43,6 +43,18 @@
   let recentsWorkspace = null;
   let busy = false;
   let turnStartedAt = 0;
+  /** @type {"idle"|"waiting"|"thinking"|"tools"|"responding"|"permission"|"done"|"error"} */
+  let turnPhase = "idle";
+  /** @type {number|null} legacy activity row id (hidden; status is footer) */
+  let activityId = null;
+  /** @type {ReturnType<typeof setInterval>|0} */
+  let activityTimer = 0;
+  /** When current phase started (CLI phase timer) */
+  let phaseStartedAt = 0;
+  /** When current thought stream started */
+  let thoughtStartedAt = 0;
+  /** Last usage text for footer (e.g. ↓169k) */
+  let lastUsageFooter = "";
   let editCount = 0;
   let bootstrap = null;
   let applyingConfig = false;
@@ -92,6 +104,16 @@
   const streamBatcher = globalThis.GrokStreamBatcher?.create?.({
     intervalMs: 40,
     onFlush(pending) {
+      if (pending.segments?.length) {
+        for (const segment of pending.segments) {
+          if (segment.kind === "assistant") eventStore.pushDelta("assistant", segment.text);
+          else if (segment.kind === "thought" && showReasoning) {
+            eventStore.pushDelta("thought", segment.text);
+          }
+        }
+        return;
+      }
+      // Backward-compatible fallback for older batcher payloads.
       if (pending.assistant) eventStore.pushDelta("assistant", pending.assistant);
       if (pending.thought && showReasoning) eventStore.pushDelta("thought", pending.thought);
     },
@@ -238,11 +260,77 @@
     <button type="button" role="menuitem" data-ctx="open">Open file</button>`;
   document.body.appendChild(mediaCtx);
 
+  const pathCtx = document.createElement("div");
+  pathCtx.id = "pathCtx";
+  pathCtx.className = "media-ctx path-ctx hidden";
+  pathCtx.setAttribute("role", "menu");
+  pathCtx.innerHTML = `
+    <button type="button" role="menuitem" data-path-act="folder" data-i18n="pathOpenContaining">Open containing folder</button>
+    <button type="button" role="menuitem" data-path-act="open" data-i18n="pathOpenTarget">Open file or folder</button>
+    <button type="button" role="menuitem" data-path-act="copy" data-i18n="pathCopy">Copy path</button>`;
+  document.body.appendChild(pathCtx);
+
   /** @type {{ kind?: string, displayUrl?: string, filePath?: string, rawSrc?: string } | null} */
   let mediaActive = null;
+  /** @type {{ path?: string, label?: string } | null} */
+  let pathActive = null;
 
   function hideMediaCtx() {
     mediaCtx.classList.add("hidden");
+  }
+
+  function hidePathCtx() {
+    pathCtx.classList.add("hidden");
+  }
+
+  function resolveSessionPath(rawPath) {
+    let value = String(rawPath || "").trim().replace(/^['"`]+|['"`]+$/g, "");
+    value = value.replace(/^file:\/\//i, "").replace(/^\/([A-Za-z]:)/, "$1");
+    try {
+      value = decodeURIComponent(value);
+    } catch {
+      /* preserve literal path */
+    }
+    if (!value || /^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(value)) return value;
+    if (!workspaceRoot) return value;
+    const root = String(workspaceRoot).replace(/[\\/]+$/, "");
+    const relative = value.replace(/^\.{1,2}[\\/]/, "").replace(/\//g, "\\");
+    return `${root}\\${relative}`;
+  }
+
+  function showPathCtx(info, pos) {
+    hideMediaCtx();
+    pathActive = info || null;
+    pathCtx.classList.remove("hidden");
+    const pad = 8;
+    const width = pathCtx.offsetWidth || 220;
+    const height = pathCtx.offsetHeight || 110;
+    let x = pos?.x ?? 0;
+    let y = pos?.y ?? 0;
+    if (x + width > window.innerWidth - pad) x = window.innerWidth - width - pad;
+    if (y + height > window.innerHeight - pad) y = window.innerHeight - height - pad;
+    pathCtx.style.left = `${Math.max(pad, x)}px`;
+    pathCtx.style.top = `${Math.max(pad, y)}px`;
+  }
+
+  async function pathAct(action, info) {
+    const current = info || pathActive;
+    const resolved = resolveSessionPath(current?.path);
+    if (!resolved) return;
+    try {
+      if (action === "folder") {
+        const result = await api.showItemInFolder?.(resolved);
+        if (result?.ok === false) addStep(result.message || "Could not open containing folder");
+      } else if (action === "open") {
+        const result = await api.openPath?.(resolved);
+        if (result?.ok === false) addStep(result.message || "Could not open path");
+      } else if (action === "copy") {
+        if (api.writeClipboardText) await api.writeClipboardText(resolved);
+        else await navigator.clipboard?.writeText?.(resolved);
+      }
+    } catch (error) {
+      addStep(error?.message || String(error));
+    }
   }
 
   function hideMediaLightbox() {
@@ -298,6 +386,7 @@
   }
 
   function showMediaCtx(info, pos) {
+    hidePathCtx();
     mediaActive = info || null;
     const copyBtn = mediaCtx.querySelector('[data-ctx="copy"]');
     if (copyBtn) {
@@ -399,16 +488,24 @@
     hideMediaCtx();
     void mediaAct(act);
   });
+  pathCtx.addEventListener("click", (e) => {
+    const action = e.target?.closest?.("[data-path-act]")?.getAttribute("data-path-act");
+    if (!action) return;
+    hidePathCtx();
+    void pathAct(action);
+  });
   document.addEventListener(
     "click",
     (e) => {
       if (!mediaCtx.classList.contains("hidden") && !mediaCtx.contains(e.target)) hideMediaCtx();
+      if (!pathCtx.classList.contains("hidden") && !pathCtx.contains(e.target)) hidePathCtx();
     },
     true,
   );
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      if (!mediaCtx.classList.contains("hidden")) hideMediaCtx();
+      if (!pathCtx.classList.contains("hidden")) hidePathCtx();
+      else if (!mediaCtx.classList.contains("hidden")) hideMediaCtx();
       else if (!mediaLightbox.classList.contains("hidden")) hideMediaLightbox();
     }
   });
@@ -416,6 +513,7 @@
   const timelineView = globalThis.GrokTimelineView?.create?.(timeline, {
     store: eventStore,
     showReasoning: () => showReasoning,
+    t: (key, fallback) => tt(key, fallback),
     openExternal: (href) => {
       const h = String(href || "");
       if (/^https?:\/\//i.test(h) || h.startsWith("data:")) void api.openExternal(h);
@@ -425,6 +523,8 @@
     resolveMedia,
     onMediaActivate: (info) => showMediaLightbox(info),
     onMediaContext: (info, pos) => showMediaCtx(info, pos),
+    onPathActivate: (info) => void pathAct("folder", info),
+    onPathContext: (info, pos) => showPathCtx(info, pos),
     onReview: (meta) => {
       if (meta?.path) void showDiff(meta);
     },
@@ -437,6 +537,10 @@
 
   // ── Phase B1 session tabs ──
   function restoreStoreItems(items) {
+    stopActivityTimer();
+    activityId = null;
+    turnPhase = "idle";
+    turnStartedAt = 0;
     streamBatcher?.clear?.();
     eventStore.clear();
     for (const it of items || []) {
@@ -471,7 +575,7 @@
         // Keep process on this session without wiping UI snapshot
         void api.loadSession?.(tab.sessionId, workspaceRoot, connectOpts()).catch(() => {});
       }
-      scrollEnd();
+      scrollEnd(true);
     },
     onNew: () => {
       void newChatTab(true);
@@ -512,13 +616,15 @@
       if (item) {
         const label =
           optionId === "__cancel__"
-            ? "Cancelled"
+            ? tt("labelCancelled", "Cancelled")
             : (item.meta?.options || []).find((o) => o.optionId === optionId)?.name ||
-              "Approved";
+              tt("labelResolved", "Resolved");
         eventStore.update(item.id, {
           meta: { resolved: true, resultLabel: label },
         });
       }
+      // Resume waiting for model after permission answer
+      if (busy) setTurnPhase("waiting");
     } catch (e) {
       addMsg("error", e.message || String(e));
     }
@@ -532,10 +638,229 @@
       disconnected: tt("disconnected", "Disconnected"),
       starting: tt("connecting", "Connecting…"),
       connected: tt("connected", "Ready"),
-      running: tt("running", "Working…"),
-      stopping: "Stopping…",
+      running: tt("statusWorking", "Working…"),
+      stopping: tt("stopping", "Stopping…"),
       error: tt("error", "Error"),
     };
+  }
+
+  // ── Turn activity phase (CLI-like: Waiting / Thinking / Tools / Responding) ──
+
+  function formatElapsed(ms) {
+    const sec = Math.max(0, Math.floor(Number(ms) / 1000));
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+
+  /** CLI-style short duration: 0.7s / 12s / 1.2s */
+  function formatPhaseSecs(ms) {
+    const sec = Math.max(0.1, Number(ms) / 1000);
+    if (sec < 10) return `${sec.toFixed(1)}s`;
+    return `${Math.round(sec)}s`;
+  }
+
+  function paintTurnStatus() {
+    const bar = $("turnStatus");
+    if (!bar) return;
+    const active =
+      busy &&
+      turnPhase &&
+      turnPhase !== "idle" &&
+      turnPhase !== "done" &&
+      turnPhase !== "error";
+    bar.classList.toggle("hidden", !active);
+    if (!active) return;
+    const labelEl = $("turnStatusLabel");
+    const phaseEl = $("turnStatusPhaseTime");
+    const totalEl = $("turnStatusTotal");
+    const tokEl = $("turnStatusTokens");
+    if (labelEl) labelEl.textContent = phaseLabel(turnPhase);
+    if (phaseEl) {
+      phaseEl.textContent = phaseStartedAt
+        ? formatPhaseSecs(Date.now() - phaseStartedAt)
+        : "";
+    }
+    if (totalEl) {
+      totalEl.textContent = turnStartedAt
+        ? formatPhaseSecs(Date.now() - turnStartedAt)
+        : "";
+    }
+    if (tokEl) tokEl.textContent = lastUsageFooter || "";
+    const icon = bar.querySelector(".turn-status-icon");
+    icon?.classList.toggle("spin", true);
+  }
+
+  function phaseLabel(phase) {
+    switch (phase) {
+      case "waiting":
+        return tt("phaseWaiting", "Waiting for response");
+      case "thinking":
+        return tt("phaseThinking", "Thinking");
+      case "tools":
+        return tt("phaseTools", "Using tools");
+      case "responding":
+        return tt("phaseResponding", "Responding");
+      case "permission":
+        return tt("phasePermission", "Waiting for permission");
+      case "done":
+        return tt("phaseDone", "Done");
+      case "error":
+        return tt("phaseError", "Stopped with error");
+      case "reconnect":
+        return tt("phaseReconnect", "Reconnecting…");
+      default:
+        return tt("statusWorking", "Working…");
+    }
+  }
+
+  function stopActivityTimer() {
+    if (activityTimer) {
+      clearInterval(activityTimer);
+      activityTimer = 0;
+    }
+  }
+
+  function startActivityTimer() {
+    stopActivityTimer();
+    activityTimer = setInterval(() => tickActivity(), 250);
+  }
+
+  function findActivityItem() {
+    if (activityId == null) return null;
+    return eventStore.items.find((it) => it.id === activityId) || null;
+  }
+
+  function tickActivity() {
+    if (!turnStartedAt) return;
+    if (
+      turnPhase === "idle" ||
+      turnPhase === "done" ||
+      turnPhase === "error"
+    ) {
+      return;
+    }
+    paintTurnStatus();
+  }
+
+  /**
+   * CLI phase machine → footer strip + header chip (no mid-timeline activity spam).
+   * @param {"waiting"|"thinking"|"tools"|"responding"|"permission"|"reconnect"} phase
+   */
+  function setTurnPhase(phase) {
+    if (!phase || phase === "idle") return;
+    if ((turnPhase === "done" || turnPhase === "error") && phase !== "waiting") return;
+
+    if (turnPhase === phase) {
+      if (busy) setStatus("running", phaseLabel(phase));
+      paintTurnStatus();
+      if (!activityTimer) startActivityTimer();
+      return;
+    }
+
+    const now = Date.now();
+    if (!turnStartedAt) turnStartedAt = now;
+    turnPhase = phase;
+    phaseStartedAt = now;
+    const label = phaseLabel(phase);
+    activityId = null; // do not append timeline activity chips
+    if (
+      busy ||
+      phase === "waiting" ||
+      phase === "thinking" ||
+      phase === "tools" ||
+      phase === "responding" ||
+      phase === "permission"
+    ) {
+      setStatus("running", label);
+    }
+    paintTurnStatus();
+    if (!activityTimer) startActivityTimer();
+  }
+
+  /** Start a new turn: Waiting + timer (call right after user message is shown). */
+  function beginTurnActivity() {
+    activityId = null;
+    turnPhase = "idle";
+    thoughtStartedAt = 0;
+    phaseStartedAt = Date.now();
+    if (!turnStartedAt) turnStartedAt = Date.now();
+    setTurnPhase("waiting");
+    startActivityTimer();
+  }
+
+  /**
+   * End turn: hide footer, stamp compact "Worked for Ns".
+   * @param {{ error?: boolean }} [opts]
+   */
+  function endTurnActivity(opts) {
+    stopActivityTimer();
+    stampThoughtDuration();
+    if (!turnStartedAt) {
+      if (
+        turnPhase === "waiting" ||
+        turnPhase === "thinking" ||
+        turnPhase === "tools" ||
+        turnPhase === "responding" ||
+        turnPhase === "permission"
+      ) {
+        turnPhase = opts?.error ? "error" : "done";
+      }
+      paintTurnStatus();
+      $("turnStatus")?.classList.add("hidden");
+      return;
+    }
+    const err = Boolean(opts?.error);
+    const started = turnStartedAt;
+    const sec = Math.max(1, Math.round((Date.now() - started) / 1000));
+    turnPhase = err ? "error" : "done";
+    activityId = null;
+    turnStartedAt = 0;
+    phaseStartedAt = 0;
+    thoughtStartedAt = 0;
+    $("turnStatus")?.classList.add("hidden");
+    // Compact CLI foot note (not a raw end_turn string)
+    eventStore.append(
+      "foot",
+      err
+        ? phaseLabel("error")
+        : tt("workedFor", "Worked for {n}s").replace("{n}", String(sec)),
+      { elapsedSec: sec },
+    );
+    setStatus(err ? "error" : "connected");
+  }
+
+  function stampThoughtDuration() {
+    if (!thoughtStartedAt) return;
+    const dur = formatPhaseSecs(Date.now() - thoughtStartedAt);
+    const item = eventStore.findLast?.(
+      (it) => it.kind === "thought" && (it.streaming || !it.meta?.durationLabel),
+    );
+    if (item) {
+      eventStore.update(item.id, {
+        meta: { durationLabel: dur, open: false },
+        streaming: false,
+      });
+    }
+    thoughtStartedAt = 0;
+  }
+
+  /** After language switch: re-label activity / foot rows and rebuild timeline chrome. */
+  function relocalizeTimeline() {
+    for (const it of eventStore.items) {
+      if (it.kind === "activity") {
+        const phase = it.meta?.phase || "waiting";
+        eventStore.update(it.id, {
+          text: phaseLabel(phase),
+          meta: { ...(it.meta || {}), phase },
+        });
+      } else if (it.kind === "foot" && it.meta?.elapsedSec != null) {
+        eventStore.update(it.id, {
+          text: tt("workedFor", "Worked for {n}s").replace("{n}", String(it.meta.elapsedSec)),
+        });
+      }
+    }
+    timelineView?.relocalize?.();
   }
 
   const LAYOUT_KEY = "grokBuild.layout.v2";
@@ -591,7 +916,7 @@
     );
     s = s.replace(/\b[0-9a-f]{8,}\b/gi, "");
     s = s.replace(/\s{2,}/g, " ").replace(/[·|]\s*$/g, "").trim();
-    // Map known technical phrases
+    // Map known technical phrases — never show raw ACP/stopReason strings
     if (/resumed|resume/i.test(s) || /session\s*$/i.test(s)) {
       return tt("chatResumed", "Chat resumed");
     }
@@ -603,6 +928,13 @@
     }
     if (/reconnect/i.test(s)) {
       return tt("connecting", "Connecting…");
+    }
+    // "Turn completed: end_turn" / stopReason noise from agent
+    if (/end_turn|turn\s*complet|stop_?reason|max_turn|cancelled|canceled/i.test(s)) {
+      return "";
+    }
+    if (/^end[_ ]?turn$/i.test(s) || /^stop$/i.test(s)) {
+      return "";
     }
     // If nothing left after stripping ids, fall back to state label
     if (!s || s.length < 2) return "";
@@ -619,8 +951,20 @@
     const t = status.querySelector(".status-text");
     const labels = statusLabels();
     const cleaned = humanizeStatusDetail(key, detail);
-    const label = cleaned || labels[key] || key;
+    // Prefer phase-aware running label when a turn is live
+    let label = cleaned || labels[key] || key;
+    if (
+      key === "running" &&
+      turnPhase &&
+      turnPhase !== "idle" &&
+      turnPhase !== "done" &&
+      turnPhase !== "error" &&
+      !cleaned
+    ) {
+      label = phaseLabel(turnPhase);
+    }
     if (t) t.textContent = label;
+    if (status) status.title = label;
     // Track live connection for auto-send / prompt
     if (key === "connected" || key === "running") {
       agentConnected = true;
@@ -770,9 +1114,15 @@
     }
   }
 
-  function scrollEnd() {
-    if (timelineView) timelineView.scrollEnd();
-    else timeline.scrollTop = timeline.scrollHeight;
+  /**
+   * @param {boolean} [force=false] true = jump to bottom and re-stick (send / turn done).
+   *   false = soft follow only when the user is already at the live tail (tools/stream).
+   */
+  function scrollEnd(force = false) {
+    if (timelineView) timelineView.scrollEnd(Boolean(force));
+    else if (force || timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 96) {
+      timeline.scrollTop = timeline.scrollHeight;
+    }
   }
 
   function clearEmpty() {
@@ -786,6 +1136,10 @@
   }
 
   function resetTimeline() {
+    stopActivityTimer();
+    activityId = null;
+    turnPhase = "idle";
+    turnStartedAt = 0;
     streamBatcher?.clear?.();
     eventStore.clear();
     eventStore.endStream("all");
@@ -855,64 +1209,58 @@
   /** Flush pending deltas and seal open assistant/thought bubbles before status rows. */
   function sealLiveStreams() {
     streamBatcher?.flushNow?.();
+    stampThoughtDuration();
     eventStore.endStream?.("all");
   }
 
-  /** Collapse open tool group when the model starts writing again. */
+  /** Close expanded running tools when model starts writing prose again. */
   function closeOpenToolGroup() {
-    const g = eventStore.findLast?.(
-      (it) => it.kind === "tool_group" && !it.meta?.closed,
-    );
-    if (g) {
-      eventStore.update(g.id, {
-        meta: {
-          closed: true,
-          open: false,
-          tools: g.meta?.tools || [],
-        },
-      });
+    for (const it of eventStore.items) {
+      if (it.kind !== "tool") continue;
+      const st = it.meta?.status;
+      if (st === "running" || st === "pending") continue;
+      if (it.meta?.open) {
+        eventStore.update(it.id, { meta: { open: false } });
+      }
     }
   }
 
   /**
-   * Upsert a tool into a collapsible Tools group (like Thinking).
-   * @param {{ toolId: string, title: string, status: string, kind?: string, detail?: string, path?: string, oldText?: string, newText?: string }} tool
+   * CLI-style: one row per tool (◇ title), expand for detail + red/green diff.
+   * @param {{ toolId: string, title: string, status: string, kind?: string, detail?: string, path?: string, oldText?: string, newText?: string, diffs?: any[], locations?: any[] }} tool
    */
   function upsertToolInGroup(tool) {
     sealLiveStreams();
     clearEmpty();
-    let group = eventStore.findLast?.(
-      (it) => it.kind === "tool_group" && !it.meta?.closed,
+    setTurnPhase("tools");
+    const existing = eventStore.findLast?.(
+      (it) => it.kind === "tool" && it.meta?.toolId === tool.toolId,
     );
-    const tools = group ? [...(group.meta?.tools || [])] : [];
-    const idx = tools.findIndex((t) => t.toolId === tool.toolId);
-    if (idx >= 0) {
-      tools[idx] = { ...tools[idx], ...tool };
-    } else {
-      tools.push(tool);
-    }
-    const running = tools.some(
-      (t) => t.status === "running" || t.status === "pending",
-    );
-    const label =
-      tools.length === 1
-        ? tools[0].title || "Tool"
-        : `Tools · ${tools.length}`;
-    if (!group) {
-      eventStore.append("tool_group", label, {
-        tools,
-        closed: false,
-        open: true,
+    const running = tool.status === "running" || tool.status === "pending";
+    const diffs =
+      tool.diffs ||
+      (tool.path
+        ? [{ path: tool.path, oldText: tool.oldText, newText: tool.newText }]
+        : existing?.meta?.diffs);
+    const meta = {
+      toolId: tool.toolId,
+      status: tool.status,
+      kind: tool.kind || existing?.meta?.kind || "",
+      detail: tool.detail != null ? tool.detail : existing?.meta?.detail || "",
+      path: tool.path || existing?.meta?.path,
+      oldText: tool.oldText != null ? tool.oldText : existing?.meta?.oldText,
+      newText: tool.newText != null ? tool.newText : existing?.meta?.newText,
+      diffs,
+      locations: tool.locations || existing?.meta?.locations,
+      open: running || Boolean(tool.path || (diffs && diffs.length)),
+    };
+    if (existing) {
+      eventStore.update(existing.id, {
+        text: tool.title || existing.text,
+        meta,
       });
     } else {
-      eventStore.update(group.id, {
-        text: label,
-        meta: {
-          tools,
-          closed: false,
-          open: running ? true : Boolean(group.meta?.open),
-        },
-      });
+      eventStore.append("tool", tool.title || tt("labelTools", "Tools"), meta);
     }
     scrollEnd();
   }
@@ -920,7 +1268,13 @@
   function appendAssistant(chunk) {
     if (!chunk) return;
     clearEmpty();
-    // New prose after tools → seal previous streams so answer is BELOW tool group
+    // A thought→answer boundary must materialize the thought before we stamp
+    // its duration; otherwise batching can leave a generic Thinking row after
+    // the final answer.
+    if (streamBatcher?.hasPending?.("thought")) streamBatcher.flushNow();
+    stampThoughtDuration();
+    setTurnPhase("responding");
+    // New prose after tools → seal previous streams so answer is BELOW tools
     closeOpenToolGroup();
     if (streamBatcher) streamBatcher.pushAssistant(chunk);
     else eventStore.pushDelta("assistant", chunk);
@@ -928,6 +1282,7 @@
 
   function resetAssistant() {
     streamBatcher?.flushNow?.();
+    stampThoughtDuration();
     eventStore.endStream("all");
     closeOpenToolGroup();
   }
@@ -935,7 +1290,8 @@
   function appendThought(chunk) {
     if (!showReasoning || !chunk) return;
     clearEmpty();
-    // Thought after tools → new bubble below group (eventStore splits when interrupted)
+    if (!thoughtStartedAt) thoughtStartedAt = Date.now();
+    setTurnPhase("thinking");
     if (streamBatcher) streamBatcher.pushThought(chunk);
     else eventStore.pushDelta("thought", chunk);
   }
@@ -1011,20 +1367,29 @@
     $("diffBody")?.classList.toggle("hidden", diffSideBySide);
     $("diffSide")?.classList.toggle("hidden", !diffSideBySide);
     const btn = $("btnDiffSide");
-    if (btn) btn.textContent = diffSideBySide ? "Unified" : "Side";
+    if (btn) {
+      btn.textContent = diffSideBySide ? tt("diffUnified", "Unified") : tt("diffSide", "Side");
+    }
+    // Side-by-side needs the full-file view; hide hunk-only mode while active
+    const panel = $("panelReview");
+    if (diffSideBySide) panel?.classList.remove("has-hunks");
+    else if (activeDiff?.hunks?.length) panel?.classList.add("has-hunks");
   }
 
   function renderHunkList() {
     const host = $("hunkList");
+    const panel = $("panelReview");
     const HD = globalThis.GrokDiffHunks;
     if (!host || !activeDiff?.hunks?.length || !HD) {
       if (host) {
         host.classList.add("hidden");
         host.innerHTML = "";
       }
+      panel?.classList.remove("has-hunks");
       return;
     }
     host.classList.remove("hidden");
+    panel?.classList.add("has-hunks");
     host.innerHTML = "";
     const decisions = activeDiff.decisions || {};
     for (const h of activeDiff.hunks) {
@@ -1034,22 +1399,30 @@
       card.dataset.decision = dec;
       const addN = h.rows.filter((r) => r.t === "add").length;
       const delN = h.rows.filter((r) => r.t === "del").length;
+      const decLabel =
+        dec === "accept"
+          ? tt("accept", "Accept")
+          : dec === "reject"
+            ? tt("reject", "Reject")
+            : "";
       const head = document.createElement("div");
       head.className = "hunk-card-head";
-      head.innerHTML = `<span>Hunk ${h.id + 1} · +${addN} −${delN}${dec !== "pending" ? ` · ${dec}` : ""}</span>`;
+      head.innerHTML = `<span>${escapeHtml(tt("hunkN", "Change {n}").replace("{n}", String(h.id + 1)))} · +${addN} −${delN}${decLabel ? ` · ${escapeHtml(decLabel)}` : ""}</span>`;
       const actions = document.createElement("div");
       actions.className = "hunk-card-actions";
-      const bAcc = document.createElement("button");
-      bAcc.type = "button";
-      bAcc.className = "pill-btn accent";
-      bAcc.textContent = "Accept";
-      bAcc.onclick = () => void decideHunk(h.id, "accept");
-      const bRej = document.createElement("button");
-      bRej.type = "button";
-      bRej.className = "pill-btn";
-      bRej.textContent = "Reject";
-      bRej.onclick = () => void decideHunk(h.id, "reject");
-      actions.append(bAcc, bRej);
+      if (dec === "pending") {
+        const bAcc = document.createElement("button");
+        bAcc.type = "button";
+        bAcc.className = "pill-btn accent";
+        bAcc.textContent = tt("accept", "Accept");
+        bAcc.onclick = () => void decideHunk(h.id, "accept");
+        const bRej = document.createElement("button");
+        bRej.type = "button";
+        bRej.className = "pill-btn";
+        bRej.textContent = tt("reject", "Reject");
+        bRej.onclick = () => void decideHunk(h.id, "reject");
+        actions.append(bAcc, bRej);
+      }
       head.appendChild(actions);
       const pre = document.createElement("pre");
       pre.innerHTML = h.rows
@@ -1107,8 +1480,12 @@
     const toolbar = $("diffToolbar");
     const pathLabel = $("diffPathLabel");
     const statsEl = $("diffStats");
+    const panel = $("panelReview");
     if (toolbar) toolbar.classList.remove("hidden");
-    if (pathLabel) pathLabel.textContent = change.path || "—";
+    if (pathLabel) {
+      pathLabel.textContent = basen(change.path) || change.path || "—";
+      pathLabel.title = change.path || "";
+    }
 
     if (change.oldText != null || change.newText != null) {
       const rows = await lineDiffAsync(change.oldText, change.newText);
@@ -1117,16 +1494,24 @@
       activeDiff.hunks = HD ? HD.groupHunks(rows) : [];
       activeDiff.decisions = {};
       const st = HD ? HD.diffStats(rows) : { add: 0, del: 0 };
+      const hunkN = activeDiff.hunks.length;
       if (statsEl) {
-        statsEl.textContent = `+${st.add} −${st.del} · ${activeDiff.hunks.length} hunk${activeDiff.hunks.length === 1 ? "" : "s"}`;
+        statsEl.textContent =
+          hunkN > 0
+            ? `+${st.add} −${st.del} · ${tt("hunkCount", "{n} changes").replace("{n}", String(hunkN))}`
+            : `+${st.add} −${st.del}`;
       }
       paintDiffUnified(rows, change.path);
       paintDiffSide(change);
       setDiffMode(diffSideBySide);
       renderHunkList();
+      // Hunk cards = primary; full file only when no hunks / side-by-side requested
+      if (hunkN > 0 && !diffSideBySide) panel?.classList.add("has-hunks");
+      else panel?.classList.remove("has-hunks");
     } else {
       if (toolbar) toolbar.classList.add("hidden");
       $("hunkList")?.classList.add("hidden");
+      panel?.classList.remove("has-hunks");
       void openInEditor(change.path);
       switchPanel("files");
     }
@@ -1539,9 +1924,16 @@
     $("panelTools")?.classList.toggle("hidden", name !== "tools");
     $("panelManager")?.classList.toggle("hidden", name !== "manager");
     $("panelArtifacts")?.classList.toggle("hidden", name !== "artifacts");
+    // Primary tabs (Files / Review)
     for (const t of document.querySelectorAll(".rtab[data-panel]")) {
       t.classList.toggle("active", t.dataset.panel === name);
     }
+    // Secondary panels live under More
+    const moreBtn = $("btnPanelMore");
+    const secondary = name === "manager" || name === "artifacts" || name === "tools";
+    moreBtn?.classList.toggle("active", secondary);
+    moreBtn?.setAttribute("aria-expanded", "false");
+    $("panelMoreMenu")?.classList.add("hidden");
     // Sidebar: Tools selected only when CLI tools panel is open
     if (name === "tools") setSideNav("tools");
     else if (sideNav === "tools") setSideNav(null);
@@ -2238,7 +2630,7 @@
         // Quiet — empty history is visible via empty hero, no technical step
       }
       // Don't flood timeline with "Loaded N messages" / session ids
-      scrollEnd();
+      scrollEnd(true);
       return n;
     } catch (e) {
       addMsg("error", `Could not load transcript: ${e.message || e}`);
@@ -2266,6 +2658,7 @@
       updateQueueBar();
       if (!next) break;
       const shown = next.displayText || next.text || "(attachment)";
+      clearEmpty();
       eventStore.append("user", shown, {
         attachments: (next.attachments || []).map((a) => ({
           name: a.name,
@@ -2273,14 +2666,16 @@
           data: a.data,
         })),
       });
-      scrollEnd();
+      scrollEnd(true);
       resetAssistant();
       turnStartedAt = Date.now();
+      beginTurnActivity();
       try {
         busy = true;
         await api.prompt(next.text || "", next.attachments || []);
       } catch (e) {
         busy = false;
+        endTurnActivity({ error: true });
         addMsg("error", e.message || String(e));
         break;
       }
@@ -2739,6 +3134,10 @@
     if (event?.type === "usage" && event.size) {
       const pct = Math.min(100, Math.round((event.used / event.size) * 100));
       usageText.textContent = `${pct}% · ${event.used}/${event.size}`;
+      // CLI footer style: ↓169k
+      const k = event.used >= 1000 ? `↓${Math.round(event.used / 1000)}k` : `↓${event.used}`;
+      lastUsageFooter = k;
+      paintTurnStatus();
       usageChip.classList.remove("hidden");
       usageChip.title = event.cost
         ? `Context ${pct}% · Cost ${event.cost.amount} ${event.cost.currency || ""}`
@@ -2755,6 +3154,10 @@
         thought != null
           ? `↑${inT} ↓${outT} · think ${thought}`
           : `↑${inT} ↓${outT}`;
+      const tot = inT + outT;
+      lastUsageFooter =
+        tot >= 1000 ? `↓${Math.round(tot / 1000)}k` : tot ? `↓${tot}` : lastUsageFooter;
+      paintTurnStatus();
       usageChip.classList.remove("hidden");
       usageChip.title = "Turn token usage (in / out)";
       if (bar) {
@@ -3330,10 +3733,15 @@
     if (!I()) return;
     I().toggle();
     I().applyDom();
-    // refresh dynamic labels
-    setStatus(status?.dataset?.state || "disconnected");
+    // refresh dynamic labels (header, projects, timeline phases EN↔VI)
+    if (busy && turnPhase && turnPhase !== "idle" && turnPhase !== "done") {
+      setStatus("running", phaseLabel(turnPhase));
+    } else {
+      setStatus(status?.dataset?.state || "disconnected");
+    }
     if (workspaceRoot) setWorkspace(workspaceRoot);
     else if ($("workspaceLabel")) $("workspaceLabel").textContent = tt("noProject", "No project");
+    relocalizeTimeline();
     showEmpty();
     if (window.GrokIcons) window.GrokIcons.applyAll();
     applyTheme(
@@ -3953,11 +4361,26 @@
   api.onEvent((event) => {
     if (!event?.type) return;
     switch (event.type) {
-      case "state":
-        setStatus(event.state, event.detail);
-        busy = event.state === "running" || event.state === "starting";
+      case "state": {
+        const nextBusy = event.state === "running" || event.state === "starting";
+        // While a turn is live, prefer phase-aware running label over generic "Working…"
+        if (
+          event.state === "running" &&
+          turnPhase &&
+          turnPhase !== "idle" &&
+          turnPhase !== "done" &&
+          turnPhase !== "error"
+        ) {
+          setStatus("running", phaseLabel(turnPhase));
+        } else {
+          setStatus(event.state, event.detail);
+        }
+        busy = nextBusy;
         sessionTabs?.setBusy?.(sessionTabs.activeId, busy);
-        if (event.state === "running" && !turnStartedAt) turnStartedAt = Date.now();
+        if (event.state === "running" && !turnStartedAt) {
+          turnStartedAt = Date.now();
+          if (activityId == null && turnPhase === "idle") beginTurnActivity();
+        }
         if (event.state === "connected" || event.state === "running") {
           agentConnected = true;
           void refreshAgentSlots();
@@ -3965,8 +4388,20 @@
         if (event.state === "disconnected") {
           agentConnected = false;
           void refreshAgentSlots();
+          if (activityId != null && turnPhase !== "done") {
+            endTurnActivity({ error: true });
+          }
         }
         break;
+      }
+      case "context": {
+        if (typeof event.showReasoning === "boolean" && event.showReasoning !== showReasoning) {
+          showReasoning = event.showReasoning;
+          if ($("chkShowReasoning")) $("chkShowReasoning").checked = showReasoning;
+          timelineView?.relocalize?.();
+        }
+        break;
+      }
       case "slot_active":
         void refreshAgentSlots();
         break;
@@ -3977,7 +4412,8 @@
         appendThought(event.text || "");
         break;
       case "reconnect":
-        addStep(event.message || "Reconnecting agent…");
+        setTurnPhase("reconnect");
+        addStep(event.message || tt("phaseReconnect", "Reconnecting…"));
         break;
       case "session_config":
         applySessionConfig(event.options);
@@ -4016,22 +4452,25 @@
         break;
       case "tool":
       case "tool_update": {
-        // Collapsed Tools group (like Thinking) — keeps timeline short
+        // CLI-like: each tool is its own expandable row (◇ Read… / Edit…)
         const title = event.title || "Tool";
         const status = event.status || (event.type === "tool" ? "running" : "done");
         const toolId = event.toolCallId || event.id || title;
-        const diff0 = (event.diffs || [])[0];
+        const diffs = event.diffs || [];
+        const diff0 = diffs[0];
         upsertToolInGroup({
           toolId,
           title,
           status,
           kind: event.kind || event.toolKind || "",
-          detail: event.content || event.output || "",
+          detail: event.detail || event.content || event.output || "",
           path: diff0?.path,
           oldText: diff0?.oldText,
           newText: diff0?.newText,
+          diffs,
+          locations: event.locations,
         });
-        for (const d of event.diffs || []) {
+        for (const d of diffs) {
           if (d.path) addReview({ path: d.path, oldText: d.oldText, newText: d.newText });
         }
         break;
@@ -4052,7 +4491,8 @@
         // Phase B5 — inline card (main no longer uses native dialog)
         sealLiveStreams();
         clearEmpty();
-        eventStore.append("permission", event.title || "Permission required", {
+        setTurnPhase("permission");
+        eventStore.append("permission", event.title || tt("phasePermission", "Waiting for permission"), {
           requestId: event.requestId,
           kind: event.kind || "",
           options: event.options || [],
@@ -4069,29 +4509,31 @@
           eventStore.update(item.id, {
             meta: {
               resolved: true,
-              resultLabel: event.cancelled ? "Cancelled" : "Resolved",
+              resultLabel: event.cancelled
+                ? tt("labelCancelled", "Cancelled")
+                : tt("labelResolved", "Resolved"),
             },
           });
         }
+        if (busy) setTurnPhase("waiting");
         break;
       }
       case "error":
-        addMsg("error", event.message || "Error");
+        addMsg("error", event.message || tt("error", "Error"));
+        if (busy || activityId != null) {
+          busy = false;
+          endTurnActivity({ error: true });
+        }
         break;
       case "turn_complete": {
         streamBatcher?.flushNow?.();
         resetAssistant();
         closeOpenToolGroup();
         busy = false;
-        if (turnStartedAt) {
-          const sec = Math.max(1, Math.round((Date.now() - turnStartedAt) / 1000));
-          eventStore.append("foot", `Worked for ${sec}s`);
-          turnStartedAt = 0;
-        }
+        endTurnActivity();
         // Always jump to latest answer (below tools), not mid-tool stack
         requestAnimationFrame(() => {
-          scrollEnd();
-          timelineView?.scrollEnd?.(true);
+          scrollEnd(true);
         });
         void drainQueue();
         break;
@@ -4315,6 +4757,7 @@
     }
 
     if (displayText || text) {
+      clearEmpty();
       eventStore.append("user", displayText || text, {
         attachments: atts.map((a) => ({
           name: a.name,
@@ -4322,7 +4765,7 @@
           data: a.data,
         })),
       });
-      scrollEnd();
+      scrollEnd(true);
     }
     // Title tab from first user line
     if ((displayText || text) && sessionTabs?.getActive?.()) {
@@ -4335,11 +4778,13 @@
     }
     resetAssistant();
     turnStartedAt = Date.now();
+    busy = true;
+    beginTurnActivity();
     try {
-      busy = true;
       await api.prompt(text, atts);
     } catch (e) {
       busy = false;
+      endTurnActivity({ error: true });
       // If agent dropped, offer reconnect path via status
       if (/not connected/i.test(String(e?.message || e))) {
         agentConnected = false;
@@ -5247,6 +5692,10 @@
     switchSettingsTab(btn.dataset.settingsTab);
   });
   $("btnSend").onclick = () => void send();
+  $("btnTurnStop") &&
+    ($("btnTurnStop").onclick = () => {
+      void api.cancel?.();
+    });
   $("btnQueueClear") &&
     ($("btnQueueClear").onclick = () => {
       promptQueue.length = 0;
@@ -5497,9 +5946,31 @@
   $("mktFilter")?.addEventListener("input", () => paintMktPlugins());
   $("mktMarketFilter")?.addEventListener("change", () => paintMktPlugins());
 
-  for (const t of document.querySelectorAll(".rtab")) {
+  for (const t of document.querySelectorAll(".rtab[data-panel]")) {
     t.onclick = () => switchPanel(t.dataset.panel);
   }
+  // More menu: Tasks / Results / Extensions (kept out of the main tab strip)
+  $("btnPanelMore") &&
+    ($("btnPanelMore").onclick = (e) => {
+      e.stopPropagation();
+      const menu = $("panelMoreMenu");
+      const btn = $("btnPanelMore");
+      if (!menu || !btn) return;
+      const open = menu.classList.toggle("hidden") === false;
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  for (const b of document.querySelectorAll("#panelMoreMenu [data-panel]")) {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      switchPanel(b.dataset.panel);
+    };
+  }
+  document.addEventListener("click", (e) => {
+    if (!e.target?.closest?.(".rtab-more-wrap")) {
+      $("panelMoreMenu")?.classList.add("hidden");
+      $("btnPanelMore")?.setAttribute("aria-expanded", "false");
+    }
+  });
 
   // ── Voice input (Web Speech API — STT into composer; MCP voice is TTS-only) ──
   function wireVoiceInput() {

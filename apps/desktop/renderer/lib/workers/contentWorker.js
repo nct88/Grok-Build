@@ -115,9 +115,11 @@ function renderMarkdown(source) {
       }
       const th = headers.map((h) => `<th>${renderInline(h)}</th>`).join("");
       const tr = rows
-        .map((r) => `<tr>${r.map((c) => `<td>${renderInline(c)}</td>`).join("")}</tr>`)
+        .map((r) => `<tr>${headers.map((_header, cellIndex) => `<td>${renderInline(r[cellIndex] ?? "")}</td>`).join("")}</tr>`)
         .join("");
-      parts.push(`<table class="md-table"><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>`);
+      // Keep worker output identical to the main-thread fallback so the same
+      // framed, horizontally scrollable table styles always apply.
+      parts.push(`<div class="md-table-wrap"><table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table></div>`);
       continue;
     }
     if (/^\s*([-*+]|\d+\.)\s+/.test(line)) {

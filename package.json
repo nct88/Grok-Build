@@ -1,6 +1,6 @@
 {
     "name":  "grok-build",
-    "version":  "0.5.29",
+    "version":  "0.5.30",
     "private":  true,
     "description":  "Grok Build product monorepo — agent desktop (CLI/ACP) primary; Code-OSS IDE optional",
     "workspaces":  [
@@ -24,8 +24,8 @@
                     "check:packaging":  "node scripts/check-packaging.mjs",
                     "check:brand":  "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-brand-assets.ps1",
                     "check:release":  "node scripts/check-release-contract.mjs",
-                    "check:visual":  "node scripts/verify-desktop-layout.mjs",
-                    "test":  "node scripts/e2e-desktop.mjs",
+                    "check:visual":  "node scripts/verify-desktop-layout.mjs \u0026\u0026 node scripts/verify-codex-session-ui.mjs",
+                    "test":  "npm run build \u0026\u0026 node scripts/e2e-desktop.mjs",
                     "test:live":  "node scripts/e2e-desktop.mjs",
                     "check":  "npm run check:arch \u0026\u0026 npm run check:packaging \u0026\u0026 npm run check:brand \u0026\u0026 npm run check:release \u0026\u0026 npm test \u0026\u0026 npm run check:visual"
                 },

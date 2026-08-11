@@ -149,9 +149,81 @@ try {
   if (!order.includes("assistant,tool_group,assistant")) {
     throw new Error(`bad order ${order}`);
   }
+
+  // Persisted transcript replay keeps display-safe thought summaries in order.
+  const s3 = g.GrokEventStore.create();
+  s3.loadTurns([
+    { role: "user", text: "question" },
+    { role: "thought", text: "safe summary", messageId: "r1", status: "completed" },
+    { role: "assistant", text: "answer" },
+  ]);
+  const replayOrder = s3.items.map((i) => i.kind).join(",");
+  if (replayOrder !== "user,thought,assistant") {
+    throw new Error(`bad transcript replay order ${replayOrder}`);
+  }
+  const replayThought = s3.items.find((i) => i.kind === "thought");
+  if (!replayThought || replayThought.meta.open !== false || replayThought.meta.messageId !== "r1") {
+    throw new Error("persisted thought metadata missing");
+  }
   ok("eventStore stream + append + split after tools");
 } catch (e) {
   fail("eventStore", e);
+}
+
+// Session transcript: restore summary_text only, never encrypted reasoning.
+try {
+  const { readSessionTranscript } = await import(
+    pathToFileURL(path.join(root, "packages/sessions/dist/index.js")).href
+  );
+  const grokHome = path.join(tmp, "grok-home");
+  const sessionId = "reasoning-session";
+  const sessionDir = path.join(
+    grokHome,
+    "sessions",
+    encodeURIComponent("C:\\work"),
+    sessionId,
+  );
+  fs.mkdirSync(sessionDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(sessionDir, "summary.json"),
+    JSON.stringify({ info: { id: sessionId, cwd: "C:\\work" } }),
+  );
+  fs.writeFileSync(
+    path.join(sessionDir, "chat_history.jsonl"),
+    [
+      { type: "system", content: "hidden system" },
+      { type: "user", content: [{ type: "text", text: "Question" }] },
+      {
+        type: "reasoning",
+        id: "reasoning-1",
+        status: "completed",
+        summary: [{ type: "summary_text", text: "Display-safe reasoning summary" }],
+        encrypted_content: "must-never-cross-ipc",
+      },
+      { type: "assistant", content: "Final answer" },
+      {
+        type: "reasoning",
+        id: "reasoning-empty",
+        status: "completed",
+        summary: [],
+        encrypted_content: "also-hidden",
+      },
+    ].map((row) => JSON.stringify(row)).join("\n"),
+  );
+  const transcript = await readSessionTranscript({ sessionId, grokHome, limit: 20 });
+  const transcriptOrder = transcript.map((item) => item.role).join(",");
+  if (transcriptOrder !== "user,thought,assistant") {
+    throw new Error(`unexpected transcript order ${transcriptOrder}`);
+  }
+  if (transcript[1]?.text !== "Display-safe reasoning summary") {
+    throw new Error("reasoning summary not restored");
+  }
+  if (JSON.stringify(transcript).includes("must-never-cross-ipc")) {
+    throw new Error("encrypted reasoning leaked into transcript");
+  }
+  ok("session transcript reasoning summary + encrypted-content boundary");
+} catch (e) {
+  fail("session transcript reasoning", e);
 }
 
 // Control plane
@@ -186,16 +258,31 @@ try {
   // eslint-disable-next-line no-new-func
   new Function(src)();
   let flushed = "";
+  let segmentOrder = "";
   const b = globalThis.GrokStreamBatcher.create({
     intervalMs: 5,
     onFlush: (p) => {
       flushed += p.assistant;
+      segmentOrder += p.segments.map((segment) => segment.kind).join(",");
     },
   });
   b.pushAssistant("a");
   b.pushAssistant("b");
   b.flushNow();
   if (flushed !== "ab") throw new Error(`flush ${flushed}`);
+  const ordered = globalThis.GrokStreamBatcher.create({
+    intervalMs: 5,
+    onFlush: (p) => {
+      segmentOrder = p.segments.map((segment) => segment.kind).join(",");
+    },
+  });
+  ordered.pushThought("reasoning");
+  ordered.pushAssistant("answer");
+  ordered.pushThought("follow-up");
+  ordered.flushNow();
+  if (segmentOrder !== "thought,assistant,thought") {
+    throw new Error(`stream segment order ${segmentOrder}`);
+  }
   ok("streamBatcher coalesce");
 } catch (e) {
   fail("streamBatcher", e);
@@ -578,7 +665,27 @@ try {
   fail("slashCommands", e);
 }
 
-// Markdown supports images
+// Finalized assistant content recognizes navigable local paths without
+// mistaking URLs or prose slash-pairs for filesystem locations.
+try {
+  const source = fs.readFileSync(
+    path.join(root, "apps/desktop/renderer/lib/pathLinks.js"),
+    "utf8",
+  );
+  // eslint-disable-next-line no-new-func
+  new Function(source)();
+  const sample = "Open E:\\work\\app\\dist\\setup.exe and apps/desktop/styles.css; skip https://example.com/a/file.txt and reasoning/tool";
+  const found = globalThis.GrokPathLinks.findSegments(sample).map((entry) => entry.path);
+  if (!found.includes("E:\\work\\app\\dist\\setup.exe")) throw new Error(`absolute path missing: ${found.join(" | ")}`);
+  if (!found.includes("apps/desktop/styles.css")) throw new Error(`relative path missing: ${found.join(" | ")}`);
+  if (found.some((value) => /example\.com|reasoning\/tool/.test(value))) throw new Error(`false path: ${found.join(" | ")}`);
+  ok("session path link detection");
+} catch (e) {
+  fail("session path links", e);
+}
+
+// Markdown supports images and emits the same framed-table wrapper on both
+// the main-thread fallback and the off-thread production renderer.
 try {
   const src = fs.readFileSync(
     path.join(root, "apps/desktop/renderer/lib/markdown.js"),
@@ -588,7 +695,31 @@ try {
   new Function(src)();
   const html = globalThis.GrokMarkdown.renderMarkdown("hi ![x](./a.png)");
   if (!/md-img|img /i.test(html)) throw new Error(html.slice(0, 120));
-  ok("markdown image tags");
+  const tableSource = "| Name | State |\n|---|---|\n| Desktop | Ready |";
+  const tableHtml = globalThis.GrokMarkdown.renderMarkdown(tableSource);
+  if (!tableHtml.includes('class="md-table-wrap"') || !tableHtml.includes("<table>")) {
+    throw new Error(`main markdown table: ${tableHtml.slice(0, 160)}`);
+  }
+
+  const previousSelf = globalThis.self;
+  let workerReply = null;
+  globalThis.self = {
+    postMessage(value) { workerReply = value; },
+    onmessage: null,
+  };
+  const workerSource = fs.readFileSync(
+    path.join(root, "apps/desktop/renderer/lib/workers/contentWorker.js"),
+    "utf8",
+  );
+  // eslint-disable-next-line no-new-func
+  new Function(workerSource)();
+  globalThis.self.onmessage({ data: { id: 1, type: "markdown", source: tableSource } });
+  if (!workerReply?.ok || !workerReply.html?.includes('class="md-table-wrap"') || !workerReply.html.includes("<table>")) {
+    throw new Error(`worker markdown table: ${String(workerReply?.html || workerReply).slice(0, 160)}`);
+  }
+  if (previousSelf === undefined) delete globalThis.self;
+  else globalThis.self = previousSelf;
+  ok("markdown images + framed tables");
 } catch (e) {
   fail("markdown images", e);
 }

@@ -123,6 +123,20 @@
           <div id="planDock" class="plan-dock hidden"></div>
           <div id="messages" class="timeline" aria-live="polite"></div>
 
+          <!-- CLI-like live turn strip (phase · phase time · total · tokens · stop) -->
+          <div id="turnStatus" class="turn-status hidden" role="status" aria-live="polite">
+            <div class="turn-status-left">
+              <span class="turn-status-icon spin" aria-hidden="true"></span>
+              <span class="turn-status-label" id="turnStatusLabel">Waiting for response</span>
+              <span class="turn-status-phase-time" id="turnStatusPhaseTime"></span>
+            </div>
+            <div class="turn-status-right">
+              <span class="turn-status-total" id="turnStatusTotal"></span>
+              <span class="turn-status-tokens" id="turnStatusTokens"></span>
+              <button type="button" class="turn-status-stop" id="btnTurnStop" title="Stop">[stop]</button>
+            </div>
+          </div>
+
           <footer class="composer-wrap">
             <div id="queueBar" class="queue-bar hidden">
               <span id="queueText">0 queued</span>
@@ -229,44 +243,45 @@
           <div class="editor-tabs">
             <button class="rtab active" data-panel="files" type="button" data-i18n="files">Files</button>
             <button class="rtab" data-panel="review" type="button" data-i18n="review">Review</button>
-            <button class="rtab" data-panel="manager" type="button" data-i18n="mgrTab" data-i18n-title="mgrTabTitle" title="Background tasks">Tasks</button>
-            <button class="rtab" data-panel="artifacts" type="button" data-i18n="artTab" data-i18n-title="artTabTitle" title="Saved results">Results</button>
-            <button class="rtab" data-panel="tools" type="button" data-i18n="cli" data-i18n-title="toolsPanelTitle" title="Extensions">Extensions</button>
+            <div class="rtab-more-wrap">
+              <button class="rtab rtab-more" id="btnPanelMore" type="button" aria-haspopup="menu" aria-expanded="false" data-i18n="panelMore" title="Tasks, Results, Extensions">More</button>
+              <div class="panel-more-menu hidden" id="panelMoreMenu" role="menu">
+                <button type="button" role="menuitem" data-panel="manager" data-i18n="mgrTab" data-i18n-title="mgrTabTitle">Tasks</button>
+                <button type="button" role="menuitem" data-panel="artifacts" data-i18n="artTab" data-i18n-title="artTabTitle">Results</button>
+                <button type="button" role="menuitem" data-panel="tools" data-i18n="cli" data-i18n-title="toolsPanelTitle">Extensions</button>
+              </div>
+            </div>
             <button id="btnClosePanel" class="tab-x panel-close" type="button" data-i18n-title="hidePanel" title="Hide panel"><span data-icon="close" data-icon-size="12"></span></button>
           </div>
           <div id="panelFiles" class="rpanel">
-            <div class="panel-intro">
-              <div>
-                <h3 class="tools-title" data-i18n="filesTitle">Project files</h3>
-                <p class="tools-lead" data-i18n="filesLead">Browse and preview files in the open project. No setup needed.</p>
-              </div>
-              <button type="button" class="help-btn" data-help="files" data-i18n-title="help" data-i18n-aria="help" title="Help" aria-label="Help">?</button>
+            <div class="panel-bar">
+              <span class="panel-bar-title" data-i18n="filesTitle">Project files</span>
+              <span class="editor-path panel-bar-path" id="filesRoot">—</span>
             </div>
-            <div class="editor-path" id="filesRoot">—</div>
             <div id="fileTree" class="file-tree"></div>
             <div class="editor-path" id="editorPath" data-i18n="selectFile">Select a file</div>
             <pre id="editorBody" class="editor-body"><code data-i18n="filePreview">// File preview</code></pre>
           </div>
           <div id="panelReview" class="rpanel hidden">
-            <div class="panel-intro">
-              <div>
-                <h3 class="tools-title" data-i18n="reviewTitle">Review edits</h3>
-                <p class="tools-lead" data-i18n="reviewLead">When the agent changes files, diffs show here so you can accept or reject them.</p>
-              </div>
-              <button type="button" class="help-btn" data-help="review" data-i18n-title="help" data-i18n-aria="help" title="Help" aria-label="Help">?</button>
+            <div class="panel-bar">
+              <span class="panel-bar-title" data-i18n="reviewTitle">Review edits</span>
+              <span class="panel-bar-hint muted" data-i18n="reviewHintShort">Accept or reject agent edits</span>
             </div>
             <div id="reviewList" class="review-list">
               <p class="muted-pad" data-i18n="agentEdits">Agent edits appear here with Review.</p>
             </div>
             <div id="diffToolbar" class="diff-toolbar hidden">
-              <span id="diffPathLabel" class="diff-path truncate">—</span>
-              <span id="diffStats" class="diff-stats muted"></span>
+              <div class="diff-toolbar-meta">
+                <span id="diffPathLabel" class="diff-path truncate" title="">—</span>
+                <span id="diffStats" class="diff-stats muted"></span>
+              </div>
               <div class="diff-toolbar-actions">
-                <button type="button" class="pill-btn" id="btnDiffSide" data-i18n="diffSide" title="Toggle side-by-side">Side</button>
-                <button type="button" class="pill-btn accent" id="btnDiffAccept" data-i18n="accept" title="Accept all hunks">Accept all</button>
-                <button type="button" class="pill-btn" id="btnDiffReject" data-i18n="reject" title="Reject all hunks">Reject all</button>
+                <button type="button" class="pill-btn accent" id="btnDiffAccept" data-i18n="accept" title="Accept all hunks">Accept</button>
+                <button type="button" class="pill-btn" id="btnDiffReject" data-i18n="reject" title="Reject all hunks">Reject</button>
+                <button type="button" class="pill-btn ghost-pill" id="btnDiffSide" data-i18n="diffSide" title="Toggle side-by-side">Side</button>
               </div>
             </div>
+            <!-- Hunk list is primary when available; full file is secondary -->
             <div id="hunkList" class="hunk-list hidden" aria-label="Diff hunks"></div>
             <div id="diffView" class="diff-view">
               <pre id="diffBody" class="editor-body diff-body"><code data-i18n="diffPreview">// Diff preview</code></pre>
@@ -981,6 +996,7 @@
   <script src="lib/domHelpers.js"></script>
   <script src="lib/diffHunks.js"></script>
   <script src="lib/fileMentions.js"></script>
+  <script src="lib/pathLinks.js"></script>
   <script src="lib/agentSlotsUi.js"></script>
   <script src="lib/slashCommands.js"></script>
   <script src="lib/markdown.js"></script>

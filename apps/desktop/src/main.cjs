@@ -2533,7 +2533,9 @@ app.whenReady().then(() => {
     return mod.readSessionTranscript({
       sessionId: String(sessionId),
       grokHome: grokEnv().GROK_HOME,
-      limit: 150,
+      // Reasoning summaries add multiple items per turn. The virtual timeline
+      // can handle a longer tail and Codex-style session review needs it.
+      limit: 600,
     });
   });
 

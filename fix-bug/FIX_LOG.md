@@ -1,5 +1,40 @@
 # FIX / CHANGE LOG
 
+## 2026-08-11 — Grok Build Desktop 0.5.30 local release candidate
+
+- Includes Codex-like session layout, ordered live reasoning/tool/answer flow, safe restoration of persisted `summary_text` reasoning, flat Plan/diff/review surfaces, framed Markdown tables, compact-window right-panel hiding, and navigable blue local paths with a context menu.
+- Release scope: Desktop primary app only; the separate Grok Build IDE repository is unchanged.
+- Distribution: local unsigned candidate with portable executable, portable ZIP, NSIS installer, hot-update channel and SHA-256 manifest. GitHub Release 0.5.29 remains the latest published download until 0.5.30 artifacts are explicitly uploaded.
+- Verification target: root `npm run check`, packaged 1000×640 layout render, release contract and manifest integrity.
+
+## 2026-08-11 — Navigable local paths in completed session answers (0.5.30)
+
+- Symptom: absolute and project-relative paths in completed assistant Markdown remained raw text; explicit Markdown file links were styled but had no local navigation behavior.
+- Resolution: hydrate finalized assistant text nodes into square blue path markers while excluding URLs, prose slash-pairs, code spans, code fences and diff content. Left-click reveals the item in its containing folder; right-click opens a viewport-safe localized menu for reveal, open and copy actions. Relative paths resolve against the active project before using the existing guarded shell IPC.
+- Security: no new filesystem IPC or permission was added; existing workspace containment, outside-workspace setting and credential-file blocks remain authoritative.
+- Verification: unit coverage exercises absolute/relative detection plus URL/prose false positives. Visual interaction coverage verifies blue treatment, left-click reveal, right-click menu, open action and menu containment at 1440×900 and compact 1000×640.
+
+## 2026-08-11 — Flat session surfaces and framed Markdown tables (0.5.30)
+
+- Symptom: Plan, file-diff/tool and review items used gray rounded card surfaces; completed Markdown tables rendered as aligned text without a visible grid in the production worker path.
+- Root cause: session surface classes carried `background`, border and radius chrome, while the off-thread Markdown renderer emitted a bare `.md-table` that did not match the main renderer's `.md-table-wrap` contract or table styles.
+- Resolution: flatten Plan, legacy/live tool containers, diff shells and review rows while retaining semantic diff colors and action affordances; standardize both Markdown renderers on `.md-table-wrap`; add a square outer frame, header treatment, cell grid and horizontal overflow for tables.
+- Verification: the visual harness proves live output remains plain text while streaming, every finalized answer becomes `md-structured`, raw `##`/`**`/pipe-table markers disappear after `turn_complete`, Plan/diff/review surfaces are transparent with zero radius, and Markdown tables have an outer/cell frame. Unit coverage checks the main and worker table markup contracts.
+
+## 2026-08-11 — Hide the right panel on narrow Desktop windows (0.5.30)
+
+- Symptom: at the compact 1000×640 viewport, the optional Files/Review panel remained visible as an overlay and reduced the usable conversation area.
+- Resolution: below or at 1180 CSS pixels, hide the right panel, its splitter, and its unavailable title-bar toggle. The stored panel preference is unchanged, so the panel returns automatically when the window becomes wide enough.
+- Regression gate: both Desktop visual harnesses now require the panel and toggle to have `display: none`, a zero-width panel box, a usable composer, and no horizontal overflow at 1000×640.
+
+## 2026-08-11 — Codex-like Desktop session reasoning and timeline (0.5.30)
+
+- Symptom: live thought and answer chunks could be reordered by batching, completed tool rows could remain expanded, the empty-state hero could remain above a new conversation, and reopening a Grok CLI session omitted its saved reasoning summaries.
+- Root cause: the stream batcher kept separate thought/assistant buffers instead of preserving segment order; the completed-tool update did not close its details element; the empty state was not cleared at send time; and the transcript parser intentionally skipped `reasoning` records.
+- Resolution: preserve ordered stream segments, flush thoughts before answers, collapse completed tools, clear the hero on send, synchronize the agent reasoning context, and restore only Grok CLI `summary_text` reasoning records as closed thought rows. Encrypted reasoning payloads remain excluded from renderer data and the DOM.
+- UI alignment: moved the Desktop surface to Codex-like neutral dark/light tokens, a centered 780 px reading column, compact reasoning/tool rows, right-aligned user bubbles, quieter three-pane chrome, and a floating rounded composer with compact-window drawer coverage checks.
+- Verification: root `npm run check` passed architecture, packaging, brand, release, 25 automated tests, and dark/light visual gates at 1440×900 plus compact 1000×640. The visual harness verified 3 live thought rows, 2 completed tool rows, 2 persisted thought rows, correct timeline order, no orphan `Thinking`, no encrypted ciphertext, and no overflow.
+
 ## Unreleased — Repository hygiene for generated and superseded local files
 
 - Symptom: Git tracked a machine-specific Electron development executable path, an outdated root-level CSS copy, duplicate logo files, and unreferenced prototype/raw media totaling 9.51 MiB.

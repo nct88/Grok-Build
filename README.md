@@ -4,7 +4,7 @@ Grok Build là ứng dụng **agent desktop** chạy trên Electron, sử dụng
 
 > **CLI là lõi · Desktop là giao diện.** Grok Build không phải bản đổi giao diện của VS Code và không triển khai một agent runtime thứ hai.
 
-Phiên bản Desktop hiện tại: **0.5.29** — xem [`product/VERSION`](product/VERSION).
+Phiên bản source/local candidate hiện tại: **0.5.30** — xem [`product/VERSION`](product/VERSION). Bản GitHub Release mới nhất vẫn là **0.5.29**.
 
 ## Tải xuống
 
