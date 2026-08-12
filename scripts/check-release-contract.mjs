@@ -10,6 +10,8 @@ const version = read("product/VERSION").trim();
 const packaging = JSON.parse(read("packaging.json"));
 const publisher = read("scripts/publish-release.ps1");
 const githubPublisher = read("scripts/publish-github-release.ps1");
+const releaseNotes = read(`docs/releases/${version}.md`);
+const releaseTemplate = read("docs/releases/TEMPLATE.md");
 const license = read("LICENSE");
 const readme = read("README.md");
 
@@ -48,6 +50,16 @@ if (!/existingReleaseExitCode/.test(githubPublisher) || !/localTagExitCode/.test
   failures.push("GitHub publisher must treat absent release/tag probes as expected state on Windows PowerShell 5");
 }
 if (!/release:github/.test(readme)) failures.push("README must document the GitHub release workflow");
+for (const [name, content] of [["current release notes", releaseNotes], ["release template", releaseTemplate]]) {
+  if (!/<!--\s*release:vi\s*-->/.test(content)) failures.push(`${name} must include the Vietnamese marker`);
+  if (!/<!--\s*release:en\s*-->/.test(content)) failures.push(`${name} must include the English marker`);
+  if (!/^\|\s*Tiếng Việt\s*\|\s*English\s*\|\s*$/m.test(content)) {
+    failures.push(`${name} must present Vietnamese and English in a parallel table`);
+  }
+}
+if (!/release:vi/.test(githubPublisher) || !/release:en/.test(githubPublisher)) {
+  failures.push("GitHub publisher must enforce bilingual release-note markers");
+}
 
 if (failures.length) {
   console.error(failures.map((failure) => `FAIL: ${failure}`).join("\n"));

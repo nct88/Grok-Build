@@ -1,5 +1,11 @@
 # FIX / CHANGE LOG
 
+## 2026-08-12 — Bilingual Vietnamese–English GitHub release content
+
+- Symptom: the public README was primarily Vietnamese while the `v0.5.30` GitHub Release body was English-only, and the deployment workflow did not prevent future single-language release notes.
+- Resolution: present the public project/download/release workflow and the 0.5.30 release notes in Vietnamese and English, add a reusable side-by-side release template, and make the GitHub publisher reject notes missing either language marker or the parallel translation table.
+- Verification: release-contract gate, publisher PowerShell syntax, full root check, GitHub Release body comparison and marker/table checks against the remote release.
+
 ## 2026-08-12 — Reproducible GitHub Release publishing workflow
 
 - Symptom: local release candidates had to be tagged and uploaded with ad-hoc GitHub CLI commands, while README download links and repository visibility text could remain on the previous release.

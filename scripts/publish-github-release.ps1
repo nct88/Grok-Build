@@ -72,6 +72,16 @@ foreach ($entry in $versions.GetEnumerator()) {
 if (-not (Test-Path -LiteralPath $notesPath -PathType Leaf)) {
   throw "Release notes are missing: $notesPath"
 }
+$notesContent = Get-Content -Raw -LiteralPath $notesPath -Encoding UTF8
+if ($notesContent -notmatch '<!--\s*release:vi\s*-->') {
+  throw "Release notes must include the Vietnamese marker: <!-- release:vi -->"
+}
+if ($notesContent -notmatch '<!--\s*release:en\s*-->') {
+  throw "Release notes must include the English marker: <!-- release:en -->"
+}
+if ($notesContent -notmatch '(?im)^\|\s*Tiếng Việt\s*\|\s*English\s*\|\s*$') {
+  throw "Release notes must present Vietnamese and English side by side in a '| Tiếng Việt | English |' table."
+}
 
 $artifacts = @(
   [pscustomobject]@{
@@ -172,6 +182,7 @@ Write-Host "Repository : $($repo.nameWithOwner) ($($repo.visibility))"
 Write-Host "Commit     : $head"
 Write-Host "Tag        : $tag"
 Write-Host "Artifacts  : $($artifacts.Count)"
+Write-Host "Languages  : Vietnamese + English"
 if ($unsigned.Count -gt 0) {
   Write-Warning "Publishing explicitly authorized unsigned Windows artifacts. SmartScreen warnings are expected."
 }

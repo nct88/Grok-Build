@@ -36,7 +36,11 @@ Until then: document the warning in release notes and keep `docs/COMPLETE.md` ho
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish-release.ps1 -Version <semver>
 ```
 
-## Publish to GitHub Releases
+## Publish to GitHub Releases / Phát hành lên GitHub Releases
+
+Release notes are a bilingual publication contract. Copy `docs/releases/TEMPLATE.md` to `docs/releases/<semver>.md`, preserve both `<!-- release:vi -->` and `<!-- release:en -->` markers, and present translated public content in the parallel `Tiếng Việt | English` table. The GitHub publisher rejects notes that omit either language or the parallel table.
+
+Release notes là hợp đồng nội dung song ngữ. Sao chép `docs/releases/TEMPLATE.md` thành `docs/releases/<semver>.md`, giữ cả hai marker `<!-- release:vi -->` và `<!-- release:en -->`, đồng thời trình bày nội dung công khai đã dịch trong bảng song song `Tiếng Việt | English`. Publisher GitHub sẽ từ chối release nếu thiếu một ngôn ngữ hoặc thiếu bảng song song.
 
 Commit and push the version, release notes and source changes before tagging:
 
@@ -88,6 +92,7 @@ Set **Update feed URL** in Settings. App compares semver and offers the download
 - [ ] Public artifacts pass `-PublicRelease` HTTPS + Authenticode gates
 - [ ] `dist/latest.json` + MANIFEST written by publish script
 - [ ] Release notes exist at `docs/releases/<version>.md`
+- [ ] Release notes preserve `release:vi`, `release:en` and the parallel `Tiếng Việt | English` table
 - [ ] `npm run release:github -- -Version <version> -DryRun` passes
 - [ ] Release commit is pushed and `HEAD` matches `origin/main`
 - [ ] Annotated tag and GitHub Release point to the verified release commit
