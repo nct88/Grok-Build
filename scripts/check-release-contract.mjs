@@ -14,6 +14,7 @@ const releaseNotes = read(`docs/releases/${version}.md`);
 const releaseTemplate = read("docs/releases/TEMPLATE.md");
 const license = read("LICENSE");
 const readme = read("README.md");
+const readmeEn = read("README.en.md");
 
 const failures = [];
 if (pkg.version !== version || desktop.version !== version) {
@@ -50,6 +51,32 @@ if (!/existingReleaseExitCode/.test(githubPublisher) || !/localTagExitCode/.test
   failures.push("GitHub publisher must treat absent release/tag probes as expected state on Windows PowerShell 5");
 }
 if (!/release:github/.test(readme)) failures.push("README must document the GitHub release workflow");
+if (!/href=["']\.\/README\.en\.md["']/.test(readme)) {
+  failures.push("Vietnamese README must link to README.en.md in its language switch");
+}
+if (!/href=["']\.\/README\.md["']/.test(readmeEn)) {
+  failures.push("English README must link back to README.md in its language switch");
+}
+for (const [name, content] of [["Vietnamese README", readme], ["English README", readmeEn]]) {
+  if (!content.includes(`**${version}**`)) failures.push(`${name} must display current version ${version}`);
+  if (!content.includes(`/releases/tag/v${version}`)) failures.push(`${name} must link to release v${version}`);
+}
+const releaseAssetPattern = new RegExp(
+  `https://github\\.com/nct88/Grok-Build/releases/download/v${version.replaceAll(".", "\\.")}/[^)\\s]+`,
+  "g",
+);
+const releaseAssets = (content) => [...new Set(content.match(releaseAssetPattern) || [])].sort();
+const viAssets = releaseAssets(readme);
+const enAssets = releaseAssets(readmeEn);
+if (viAssets.length !== 4) failures.push(`Vietnamese README must expose 4 release assets, found ${viAssets.length}`);
+if (JSON.stringify(viAssets) !== JSON.stringify(enAssets)) {
+  failures.push("Vietnamese and English README download links must match exactly");
+}
+const sectionCount = (content) => (content.match(/^##\s+/gm) || []).length;
+if (sectionCount(readme) !== sectionCount(readmeEn)) {
+  failures.push(`README section count mismatch: vi=${sectionCount(readme)}, en=${sectionCount(readmeEn)}`);
+}
+if (readmeEn.length < readme.length * 0.75) failures.push("English README appears incomplete");
 for (const [name, content] of [["current release notes", releaseNotes], ["release template", releaseTemplate]]) {
   if (!/<!--\s*release:vi\s*-->/.test(content)) failures.push(`${name} must include the Vietnamese marker`);
   if (!/<!--\s*release:en\s*-->/.test(content)) failures.push(`${name} must include the English marker`);
@@ -60,9 +87,12 @@ for (const [name, content] of [["current release notes", releaseNotes], ["releas
 if (!/release:vi/.test(githubPublisher) || !/release:en/.test(githubPublisher)) {
   failures.push("GitHub publisher must enforce bilingual release-note markers");
 }
+if (!/scripts\/check-release-contract\.mjs/.test(githubPublisher)) {
+  failures.push("GitHub publisher must run the README and release-content contract before publishing");
+}
 
 if (failures.length) {
   console.error(failures.map((failure) => `FAIL: ${failure}`).join("\n"));
   process.exit(1);
 }
-console.log(`Release contract OK (${version}): immutable artifacts, complete channels, portable manifest paths.`);
+console.log(`Release contract OK (${version}): immutable artifacts, complete channels, bilingual README/release content.`);

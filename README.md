@@ -1,27 +1,29 @@
 # Grok Build
 
-| Tiếng Việt | English |
-|---|---|
-| Grok Build là ứng dụng **agent desktop** chạy trên Electron, sử dụng **Grok CLI chính thức** qua giao thức ACP (`grok agent stdio`). Ứng dụng tập trung vào trải nghiệm trò chuyện, quản lý phiên, duyệt thay đổi mã nguồn, terminal và điều phối công việc; vòng lặp agent, công cụ, xác thực và phiên làm việc vẫn do Grok CLI quản lý. | Grok Build is an Electron **agent desktop** powered by the **official Grok CLI** through ACP (`grok agent stdio`). It focuses on conversations, session management, code review, terminal access and task orchestration, while the agent loop, tools, authentication and sessions remain owned by Grok CLI. |
+<p align="right">
+  <strong>🇻🇳 Tiếng Việt</strong> · <a href="./README.en.md">🇬🇧 English</a>
+</p>
 
-> **CLI là lõi · Desktop là giao diện. / CLI is the core · Desktop is the interface.** Grok Build không phải bản đổi giao diện của VS Code và không triển khai một agent runtime thứ hai. / Grok Build is not a reskinned VS Code and does not implement a second agent runtime.
+Grok Build là ứng dụng **agent desktop** chạy trên Electron, sử dụng **Grok CLI chính thức** qua giao thức ACP (`grok agent stdio`). Ứng dụng tập trung vào trải nghiệm trò chuyện, quản lý phiên, duyệt thay đổi mã nguồn, terminal và điều phối công việc; vòng lặp agent, công cụ, xác thực và phiên làm việc vẫn do Grok CLI quản lý.
 
-Phiên bản source và GitHub Release hiện tại / Current source and GitHub Release: **0.5.30** — xem / see [`product/VERSION`](product/VERSION).
+> **CLI là lõi · Desktop là giao diện.** Grok Build không phải bản đổi giao diện của VS Code và không triển khai một agent runtime thứ hai.
 
-## Tải xuống / Downloads
+Phiên bản source và GitHub Release hiện tại: **0.5.30** — xem [`product/VERSION`](product/VERSION).
 
-Release được phát hành công khai tại GitHub Releases. / The release is publicly available on GitHub Releases.
+## Tải xuống
 
-| Gói / Package | Mục đích / Purpose | Tải xuống / Download |
+Release được phát hành công khai tại GitHub Releases:
+
+| Gói | Mục đích | Tải xuống |
 |---|---|---|
-| NSIS Setup | Cài vào Windows, tạo Start Menu/shortcut. / Install on Windows with Start Menu and shortcut integration. | [Grok-Build-Setup-0.5.30.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.30/Grok-Build-Setup-0.5.30.exe) |
-| Portable EXE | Chạy dạng file tự giải nén. / Run as a self-extracting executable. | [Grok-Build-0.5.30-win32-x64-portable.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.30/Grok-Build-0.5.30-win32-x64-portable.exe) |
-| Portable ZIP | Giải nén một lần, phù hợp dùng lâu dài. / Extract once; recommended for regular use. | [Grok-Build-0.5.30-win32-x64.zip](https://github.com/nct88/Grok-Build/releases/download/v0.5.30/Grok-Build-0.5.30-win32-x64.zip) |
-| Manifest | Kích thước và SHA-256 của artifact. / Artifact sizes and SHA-256 values. | [MANIFEST.json](https://github.com/nct88/Grok-Build/releases/download/v0.5.30/MANIFEST.json) |
+| NSIS Setup | Cài vào Windows, tạo Start Menu/shortcut | [Grok-Build-Setup-0.5.30.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.30/Grok-Build-Setup-0.5.30.exe) |
+| Portable EXE | Chạy dạng file tự giải nén | [Grok-Build-0.5.30-win32-x64-portable.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.30/Grok-Build-0.5.30-win32-x64-portable.exe) |
+| Portable ZIP | Giải nén một lần, phù hợp dùng lâu dài | [Grok-Build-0.5.30-win32-x64.zip](https://github.com/nct88/Grok-Build/releases/download/v0.5.30/Grok-Build-0.5.30-win32-x64.zip) |
+| Manifest | Kích thước và SHA-256 của artifact | [MANIFEST.json](https://github.com/nct88/Grok-Build/releases/download/v0.5.30/MANIFEST.json) |
 
-Trang phát hành / Release page: [Grok Build v0.5.30](https://github.com/nct88/Grok-Build/releases/tag/v0.5.30).
+Trang phát hành: [Grok Build v0.5.30](https://github.com/nct88/Grok-Build/releases/tag/v0.5.30).
 
-Các file Windows hiện chưa được ký Authenticode. SmartScreen có thể cảnh báo trong lần chạy đầu; hãy kiểm tra SHA-256 trong `MANIFEST.json` trước khi mở file. / Windows artifacts are currently unsigned and may trigger SmartScreen on first run; verify their SHA-256 values against `MANIFEST.json` before opening them.
+Các file Windows hiện chưa được ký Authenticode. SmartScreen có thể cảnh báo trong lần chạy đầu; hãy kiểm tra SHA-256 trong `MANIFEST.json` trước khi mở file.
 
 ## Quan hệ giữa các sản phẩm
 
@@ -212,9 +214,9 @@ $env:GROK_E2E_LIVE = '1'
 npm test
 ```
 
-## Đóng gói và phát hành Windows / Package and publish for Windows
+## Đóng gói và phát hành Windows
 
-### 1. Tạo local candidate bất biến / Build an immutable local candidate
+### 1. Tạo local candidate bất biến
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass `
@@ -222,7 +224,7 @@ powershell -NoProfile -ExecutionPolicy Bypass `
   -Version <semver>
 ```
 
-Mỗi version là bất biến; script sẽ dừng nếu `dist/<version>` đã tồn tại. / Every version is immutable; the script stops if `dist/<version>` already exists.
+Mỗi version là bất biến; script sẽ dừng nếu `dist/<version>` đã tồn tại.
 
 ```text
 dist/<version>/
@@ -239,7 +241,7 @@ dist/<version>/
 └─ latest.json
 ```
 
-### 2. Commit và push source của release / Commit and push the release source
+### 2. Commit và push source của release
 
 ```powershell
 npm run check
@@ -248,24 +250,22 @@ git commit -m "release: Grok Build <semver>"
 git push origin main
 ```
 
-### 3. Kiểm tra và phát hành GitHub Release / Verify and publish the GitHub Release
+### 3. Kiểm tra và phát hành GitHub Release
 
 ```powershell
-# Chỉ kiểm tra; không tạo tag hoặc release / Preflight only; create nothing
+# Chỉ kiểm tra; không tạo tag hoặc release
 npm run release:github -- -Version <semver> -DryRun
 
-# Artifact đã ký Authenticode / Authenticode-signed artifacts
+# Artifact đã ký Authenticode
 npm run release:github -- -Version <semver>
 
-# Ngoại lệ chưa ký: chỉ dùng khi maintainer phê duyệt / Unsigned exception: maintainer approval required
+# Ngoại lệ chưa ký: chỉ dùng khi maintainer phê duyệt
 npm run release:github -- -Version <semver> -AllowUnsigned
 ```
 
-| Tiếng Việt | English |
-|---|---|
-| Publisher chỉ chạy khi worktree sạch, `HEAD` khớp `origin/main`, version đồng bộ, release notes song ngữ tồn tại và SHA-256 của artifact khớp `MANIFEST.json`. Script tạo annotated tag `v<semver>`, push tag, tạo GitHub Release mới nhất và upload Setup, Portable EXE, Portable ZIP cùng manifest. Tag/release đã tồn tại sẽ không bị ghi đè. | The publisher runs only when the worktree is clean, `HEAD` matches `origin/main`, versions are synchronized, bilingual release notes exist and artifact SHA-256 values match `MANIFEST.json`. It creates and pushes annotated tag `v<semver>`, publishes the latest GitHub Release, and uploads Setup, Portable EXE, Portable ZIP and the manifest. Existing tags/releases are never overwritten. |
+Publisher chỉ chạy khi worktree sạch, `HEAD` khớp `origin/main`, version đồng bộ, cặp README Việt–Anh và release notes song ngữ hợp lệ, đồng thời SHA-256 của artifact khớp `MANIFEST.json`. Script tạo annotated tag `v<semver>`, push tag, tạo GitHub Release mới nhất và upload Setup, Portable EXE, Portable ZIP cùng manifest. Tag/release đã tồn tại sẽ không bị ghi đè.
 
-Phát hành công khai chuẩn yêu cầu HTTPS và chữ ký Authenticode hợp lệ. Bản chưa ký phải có phê duyệt maintainer bằng cờ `-AllowUnsigned` và luôn kèm cảnh báo SmartScreen. Release notes phải bắt đầu từ [`docs/releases/TEMPLATE.md`](docs/releases/TEMPLATE.md) và giữ nội dung `Tiếng Việt | English` song song. / Standard public releases require HTTPS and valid Authenticode signatures. Unsigned builds require explicit maintainer approval through `-AllowUnsigned` and must retain the SmartScreen warning. Release notes must start from the bilingual template and keep Vietnamese and English content side by side. See [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
+Phát hành công khai chuẩn yêu cầu HTTPS và chữ ký Authenticode hợp lệ. Bản chưa ký phải có phê duyệt maintainer bằng cờ `-AllowUnsigned` và luôn kèm cảnh báo SmartScreen. Release notes phải bắt đầu từ [`docs/releases/TEMPLATE.md`](docs/releases/TEMPLATE.md) và giữ nội dung `Tiếng Việt | English` song song. `README.md` và `README.en.md` phải cùng version, cùng link tải và liên kết chuyển ngôn ngữ hai chiều. Xem [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
 
 ## Cấu trúc repository
 

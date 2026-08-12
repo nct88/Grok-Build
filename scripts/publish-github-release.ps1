@@ -82,6 +82,7 @@ if ($notesContent -notmatch '<!--\s*release:en\s*-->') {
 if ($notesContent -notmatch '(?im)^\|\s*Tiếng Việt\s*\|\s*English\s*\|\s*$') {
   throw "Release notes must present Vietnamese and English side by side in a '| Tiếng Việt | English |' table."
 }
+Invoke-Native "node" @("scripts/check-release-contract.mjs") | Out-Null
 
 $artifacts = @(
   [pscustomobject]@{
@@ -183,6 +184,7 @@ Write-Host "Commit     : $head"
 Write-Host "Tag        : $tag"
 Write-Host "Artifacts  : $($artifacts.Count)"
 Write-Host "Languages  : Vietnamese + English"
+Write-Host "README     : README.md <-> README.en.md"
 if ($unsigned.Count -gt 0) {
   Write-Warning "Publishing explicitly authorized unsigned Windows artifacts. SmartScreen warnings are expected."
 }

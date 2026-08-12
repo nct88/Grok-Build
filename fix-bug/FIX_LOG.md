@@ -1,5 +1,12 @@
 # FIX / CHANGE LOG
 
+## 2026-08-12 — Fast README language switch with deployment parity gate
+
+- Symptom: the repository displayed Vietnamese and English together in selected README sections, but GitHub has no native per-repository language switch and visitors could not open a clean single-language document.
+- Resolution: keep `README.md` as the complete Vietnamese page, add a complete `README.en.md`, and place reciprocal Vietnamese/English controls at the top of both files.
+- Prevention: the release contract now verifies reciprocal relative links, current version, matching section counts, English-content completeness and exact parity of all four release download URLs; the GitHub publisher executes that contract before publishing.
+- Verification: focused release-contract check, full root gate, remote README link inspection and GitHub-rendered link targets.
+
 ## 2026-08-12 — Bilingual Vietnamese–English GitHub release content
 
 - Symptom: the public README was primarily Vietnamese while the `v0.5.30` GitHub Release body was English-only, and the deployment workflow did not prevent future single-language release notes.

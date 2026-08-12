@@ -42,6 +42,18 @@ Release notes are a bilingual publication contract. Copy `docs/releases/TEMPLATE
 
 Release notes là hợp đồng nội dung song ngữ. Sao chép `docs/releases/TEMPLATE.md` thành `docs/releases/<semver>.md`, giữ cả hai marker `<!-- release:vi -->` và `<!-- release:en -->`, đồng thời trình bày nội dung công khai đã dịch trong bảng song song `Tiếng Việt | English`. Publisher GitHub sẽ từ chối release nếu thiếu một ngôn ngữ hoặc thiếu bảng song song.
 
+### Repository README language switch / Nút chuyển ngôn ngữ README
+
+- `README.md` is the complete Vietnamese landing page; `README.en.md` is its complete English counterpart.
+- Both files keep the language switch at the top and link to each other with relative paths so links remain valid on branches and tags.
+- Both files must display the same current version and expose the exact same four GitHub Release download links.
+- The release-contract gate compares reciprocal links, version, section count, content completeness and download-link parity. The GitHub publisher runs this gate again before creating a tag or release.
+
+- `README.md` là trang giới thiệu tiếng Việt đầy đủ; `README.en.md` là bản English đầy đủ tương ứng.
+- Cả hai file giữ nút chuyển ngôn ngữ ở đầu trang và liên kết tương đối qua lại để vẫn hoạt động trên branch và tag.
+- Hai file phải hiển thị cùng version hiện tại và đúng cùng bốn link tải GitHub Release.
+- Gate release so sánh liên kết hai chiều, version, số section, độ đầy đủ nội dung và sự đồng nhất của link tải. Publisher GitHub chạy lại gate này trước khi tạo tag hoặc release.
+
 Commit and push the version, release notes and source changes before tagging:
 
 ```powershell
@@ -93,6 +105,7 @@ Set **Update feed URL** in Settings. App compares semver and offers the download
 - [ ] `dist/latest.json` + MANIFEST written by publish script
 - [ ] Release notes exist at `docs/releases/<version>.md`
 - [ ] Release notes preserve `release:vi`, `release:en` and the parallel `Tiếng Việt | English` table
+- [ ] `README.md` and `README.en.md` have reciprocal language links, matching version and identical download URLs
 - [ ] `npm run release:github -- -Version <version> -DryRun` passes
 - [ ] Release commit is pushed and `HEAD` matches `origin/main`
 - [ ] Annotated tag and GitHub Release point to the verified release commit
