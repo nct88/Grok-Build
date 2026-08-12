@@ -33,5 +33,4 @@ npm run check
 
 ### Security notes
 
-See `docs/reports/SECURITY_REVIEW_0.5.20.md`.  
 Unsigned Windows build — SmartScreen may warn on first run. Details: `docs/DISTRIBUTION.md`.

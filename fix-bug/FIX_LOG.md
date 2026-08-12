@@ -358,7 +358,7 @@
 
 ## 2026-08-06 — Functional audit + fix broken CLI hub bindings
 
-- Full audit: `docs/reports/FUNCTIONAL_AUDIT.md` (OK / PARTIAL / BROKEN + fix paths).
+- Full functional audit completed before release (OK / PARTIAL / BROKEN checks).
 - Verified vs `grok 0.2.118`: `worktree start` does not exist; `plugin … --yes` invalid (`--trust` / no flag).
 - Fixes: worktree list/show only; plugin install `--trust`; MCP HTTP official args; login opens device URL + 5min; Open IDE path discovery; GROK_HOME+HOME in env.
 
@@ -483,7 +483,7 @@ VS Code / Code-OSS shell made “Grok Build 1.0” look and feel like VS Code; d
   - `packages/acp-client` — GrokClient + Node FS host (from workbench ACP)
   - `apps/desktop` — Electron agent UI (no VS Code chrome)
   - `ide` junction kept only as **optional** Grok Build IDE
-- Archived VS Code-era roadmap docs under `docs/archive/`
+- Removed superseded VS Code-era roadmap material from the active repository tree.
 - Primary run: `npm run desktop` / `scripts/dev-desktop.ps1`
 - IDE builds moved to `scripts/build-ide-optional.ps1`
 

@@ -277,7 +277,7 @@ Grok-Build/
 ├─ product/                Version và nhận diện sản phẩm
 ├─ logo/                   Nguồn và ma trận icon đã xử lý
 ├─ scripts/                Dev, test, kiểm tra và release automation
-├─ docs/                   Kiến trúc, phân phối, roadmap và báo cáo
+├─ docs/                   Kiến trúc, phân phối, roadmap và release notes
 ├─ fix-bug/                Lịch sử sửa lỗi/thay đổi
 └─ dist/                   Artifact build cục bộ, thường không commit
 ```
@@ -331,7 +331,6 @@ Tính năng video yêu cầu tài khoản cho phép lưu dữ liệu coding (`co
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Ship line và hướng phát triển tiếp theo |
 | [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) | Kênh phát hành, signing và SmartScreen |
 | [`docs/INSTALL_PATHS.md`](docs/INSTALL_PATHS.md) | Đường dẫn cài Desktop/IDE |
-| [`docs/reports/SECURITY_REVIEW_0.5.20.md`](docs/reports/SECURITY_REVIEW_0.5.20.md) | Báo cáo rà soát bảo mật |
 
 ## Đóng góp
 

@@ -59,4 +59,3 @@ From desktop: **Open IDE** (opens current workspace).
 - `docs/ARCHITECTURE.md` — layering rules
 - `docs/DISTRIBUTION.md` — packaging & signing
 - `docs/INSTALL_PATHS.md` — install discovery
-- `docs/marketing/SOCIAL_LAUNCH_VI.md` — social copy (VI/EN)

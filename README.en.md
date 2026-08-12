@@ -277,7 +277,7 @@ Grok-Build/
 ├─ product/                Version and product identity
 ├─ logo/                   Source and processed icon matrix
 ├─ scripts/                Development, tests, checks and release automation
-├─ docs/                   Architecture, distribution, roadmap and reports
+├─ docs/                   Architecture, distribution, roadmap and release notes
 ├─ fix-bug/                Fix/change history
 └─ dist/                   Local build artifacts, normally not committed
 ```
@@ -331,7 +331,6 @@ The application checks Settings, `GROK_BUILD_IDE`, default installation paths an
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Ship line and future direction |
 | [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) | Release channels, signing and SmartScreen |
 | [`docs/INSTALL_PATHS.md`](docs/INSTALL_PATHS.md) | Desktop/IDE installation paths |
-| [`docs/reports/SECURITY_REVIEW_0.5.20.md`](docs/reports/SECURITY_REVIEW_0.5.20.md) | Security review report |
 
 ## Contributing
 

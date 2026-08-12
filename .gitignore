@@ -1,9 +1,12 @@
 node_modules/
 dist/
 .build/
-temp/
-scratch/
-docs/reports/evidence/
+/temp/
+/scratch/
+/memory/
+/.project-memory/
+/docs/reports/
+/docs/social/
 packages/*/dist/
 apps/desktop/out/
 /apps/desktop/build/dev-electron-path.txt

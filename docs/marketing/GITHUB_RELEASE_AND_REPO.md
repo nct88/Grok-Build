@@ -135,7 +135,6 @@ npm run check
 - Architecture: `docs/ARCHITECTURE.md`
 - Distribution: `docs/DISTRIBUTION.md`
 - Install paths: `docs/INSTALL_PATHS.md`
-- Social / launch copy (VI): `docs/marketing/SOCIAL_LAUNCH_VI.md`
 ```
 
 ### Option B — tag matches ship (`v0.5.23`) but title mentions product 1.0
