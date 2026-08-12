@@ -4,20 +4,20 @@ Grok Build là ứng dụng **agent desktop** chạy trên Electron, sử dụng
 
 > **CLI là lõi · Desktop là giao diện.** Grok Build không phải bản đổi giao diện của VS Code và không triển khai một agent runtime thứ hai.
 
-Phiên bản source/local candidate hiện tại: **0.5.30** — xem [`product/VERSION`](product/VERSION). Bản GitHub Release mới nhất vẫn là **0.5.29**.
+Phiên bản source và GitHub Release hiện tại: **0.5.30** — xem [`product/VERSION`](product/VERSION).
 
 ## Tải xuống
 
-Release hiện tại nằm trong repository private và yêu cầu tài khoản GitHub có quyền truy cập:
+Release được phát hành công khai tại GitHub Releases:
 
 | Gói | Mục đích | Tải xuống |
 |---|---|---|
-| NSIS Setup | Cài vào Windows, tạo Start Menu/shortcut | [Grok-Build-Setup-0.5.29.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.29/Grok-Build-Setup-0.5.29.exe) |
-| Portable EXE | Chạy dạng file tự giải nén | [Grok-Build-0.5.29-win32-x64-portable.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.29/Grok-Build-0.5.29-win32-x64-portable.exe) |
-| Portable ZIP | Giải nén một lần, phù hợp dùng lâu dài | [Grok-Build-0.5.29-win32-x64.zip](https://github.com/nct88/Grok-Build/releases/download/v0.5.29/Grok-Build-0.5.29-win32-x64.zip) |
-| Manifest | Kích thước và SHA-256 của artifact | [MANIFEST.json](https://github.com/nct88/Grok-Build/releases/download/v0.5.29/MANIFEST.json) |
+| NSIS Setup | Cài vào Windows, tạo Start Menu/shortcut | [Grok-Build-Setup-0.5.30.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.30/Grok-Build-Setup-0.5.30.exe) |
+| Portable EXE | Chạy dạng file tự giải nén | [Grok-Build-0.5.30-win32-x64-portable.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.30/Grok-Build-0.5.30-win32-x64-portable.exe) |
+| Portable ZIP | Giải nén một lần, phù hợp dùng lâu dài | [Grok-Build-0.5.30-win32-x64.zip](https://github.com/nct88/Grok-Build/releases/download/v0.5.30/Grok-Build-0.5.30-win32-x64.zip) |
+| Manifest | Kích thước và SHA-256 của artifact | [MANIFEST.json](https://github.com/nct88/Grok-Build/releases/download/v0.5.30/MANIFEST.json) |
 
-Trang release: [Grok Build v0.5.29](https://github.com/nct88/Grok-Build/releases/tag/v0.5.29).
+Trang release: [Grok Build v0.5.30](https://github.com/nct88/Grok-Build/releases/tag/v0.5.30).
 
 Các file Windows hiện chưa được ký Authenticode. SmartScreen có thể cảnh báo trong lần chạy đầu; hãy kiểm tra SHA-256 trong `MANIFEST.json` trước khi mở file.
 
@@ -103,7 +103,7 @@ Thứ tự tìm Grok CLI:
 
 ### Cách 1: NSIS Setup
 
-1. Tải `Grok-Build-Setup-0.5.29.exe` từ release.
+1. Tải `Grok-Build-Setup-0.5.30.exe` từ release.
 2. Kiểm tra checksum trong `MANIFEST.json`.
 3. Chạy installer và mở **Grok Build** từ Start Menu.
 4. Chọn project hoặc bắt đầu một cuộc trò chuyện không có project.
@@ -210,7 +210,9 @@ $env:GROK_E2E_LIVE = '1'
 npm test
 ```
 
-## Đóng gói release Windows
+## Đóng gói và phát hành release Windows
+
+### 1. Tạo local candidate bất biến
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass `
@@ -235,7 +237,31 @@ dist/<version>/
 └─ latest.json
 ```
 
-Phát hành công khai yêu cầu HTTPS và chữ ký Authenticode hợp lệ. Xem [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
+### 2. Commit và push source của release
+
+```powershell
+npm run check
+git add -A
+git commit -m "release: Grok Build <semver>"
+git push origin main
+```
+
+### 3. Kiểm tra và phát hành GitHub Release
+
+```powershell
+# Chỉ kiểm tra; không tạo tag hoặc release
+npm run release:github -- -Version <semver> -DryRun
+
+# Artifact đã ký Authenticode
+npm run release:github -- -Version <semver>
+
+# Ngoại lệ cho artifact chưa ký: chỉ dùng khi maintainer đã phê duyệt rõ ràng
+npm run release:github -- -Version <semver> -AllowUnsigned
+```
+
+Publisher chỉ chạy khi worktree sạch, `HEAD` đã khớp `origin/main`, version đồng bộ, release notes tồn tại và SHA-256 của artifact khớp `MANIFEST.json`. Script tạo annotated tag `v<semver>`, push tag, tạo GitHub Release mới nhất và upload Setup, Portable EXE, Portable ZIP cùng manifest. Tag/release đã tồn tại sẽ không bị ghi đè.
+
+Phát hành công khai chuẩn yêu cầu HTTPS và chữ ký Authenticode hợp lệ. Bản chưa ký phải có phê duyệt maintainer bằng cờ `-AllowUnsigned` và luôn kèm cảnh báo SmartScreen. Xem [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
 
 ## Cấu trúc repository
 

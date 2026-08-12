@@ -9,6 +9,7 @@ const desktop = JSON.parse(read("apps/desktop/package.json"));
 const version = read("product/VERSION").trim();
 const packaging = JSON.parse(read("packaging.json"));
 const publisher = read("scripts/publish-release.ps1");
+const githubPublisher = read("scripts/publish-github-release.ps1");
 const license = read("LICENSE");
 const readme = read("README.md");
 
@@ -30,6 +31,17 @@ if (!/Release .*already exists/.test(publisher)) failures.push("publisher must r
 if (!/NSIS installer was not produced/.test(publisher)) failures.push("publisher must fail when installer is missing");
 if (!/PublicRelease requires an HTTPS/.test(publisher)) failures.push("public release must require HTTPS");
 if (!/Get-AuthenticodeSignature/.test(publisher)) failures.push("public release must verify signatures");
+if (!pkg.scripts?.["release:github"]?.includes("publish-github-release.ps1")) {
+  failures.push("package scripts must expose the guarded GitHub release publisher");
+}
+if (!/status.*--porcelain/s.test(githubPublisher)) failures.push("GitHub publisher must require a clean worktree");
+if (!/origin\/\$branch/.test(githubPublisher)) failures.push("GitHub publisher must compare HEAD with the remote branch");
+if (!/Assert-Hash/.test(githubPublisher)) failures.push("GitHub publisher must verify manifest hashes");
+if (!/Get-AuthenticodeSignature/.test(githubPublisher)) failures.push("GitHub publisher must inspect executable signatures");
+if (!/AllowUnsigned/.test(githubPublisher)) failures.push("GitHub publisher must require an explicit unsigned override");
+if (!/release.*create.*\$tag/s.test(githubPublisher)) failures.push("GitHub publisher must create a tagged release");
+if (!/--verify-tag/.test(githubPublisher)) failures.push("GitHub publisher must verify the pushed tag");
+if (!/release:github/.test(readme)) failures.push("README must document the GitHub release workflow");
 
 if (failures.length) {
   console.error(failures.map((failure) => `FAIL: ${failure}`).join("\n"));

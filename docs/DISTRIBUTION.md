@@ -30,10 +30,36 @@ enterprise distribution:
 
 Until then: document the warning in release notes and keep `docs/COMPLETE.md` honest about unsigned status.
 
-## Publish
+## Build an immutable local candidate
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish-release.ps1 -Version 0.5.27
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish-release.ps1 -Version <semver>
+```
+
+## Publish to GitHub Releases
+
+Commit and push the version, release notes and source changes before tagging:
+
+```powershell
+npm run check
+git add -A
+git commit -m "release: Grok Build <semver>"
+git push origin main
+```
+
+Run the GitHub publisher in preflight mode first, then publish:
+
+```powershell
+npm run release:github -- -Version <semver> -DryRun
+npm run release:github -- -Version <semver>
+```
+
+The publisher requires a clean default branch synchronized with `origin`, matching source/manifest versions, release notes at `docs/releases/<semver>.md`, and artifact hashes matching `MANIFEST.json`. It creates and pushes annotated tag `v<semver>`, publishes the GitHub Release as latest, and uploads Setup, Portable EXE, Portable ZIP and the manifest. Existing tags and releases are never overwritten.
+
+Unsigned artifacts are rejected by default. `-AllowUnsigned` is an explicit maintainer-authorized exception and must retain the SmartScreen warning in the release notes:
+
+```powershell
+npm run release:github -- -Version <semver> -AllowUnsigned
 ```
 
 ## Update feed (DIY)
@@ -61,3 +87,8 @@ Set **Update feed URL** in Settings. App compares semver and offers the download
 - [ ] Public distribution is authorized under `LICENSE` or a separate written agreement
 - [ ] Public artifacts pass `-PublicRelease` HTTPS + Authenticode gates
 - [ ] `dist/latest.json` + MANIFEST written by publish script
+- [ ] Release notes exist at `docs/releases/<version>.md`
+- [ ] `npm run release:github -- -Version <version> -DryRun` passes
+- [ ] Release commit is pushed and `HEAD` matches `origin/main`
+- [ ] Annotated tag and GitHub Release point to the verified release commit
+- [ ] GitHub assets match Setup, Portable EXE, Portable ZIP and MANIFEST names

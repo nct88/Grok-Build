@@ -18,6 +18,7 @@
                     "start":  "npm run desktop",
                     "dist:desktop":  "npm run icons \u0026\u0026 npm run build \u0026\u0026 npm run dist -w @grok-build/desktop",
                     "release":  "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-release.ps1",
+                    "release:github":  "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-github-release.ps1",
                     "portable":  "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-portable.ps1",
                     "portable:shortcut":  "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-portable.ps1 -Shortcut",
                     "check:arch":  "node scripts/check-architecture.mjs",

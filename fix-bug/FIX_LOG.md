@@ -1,5 +1,12 @@
 # FIX / CHANGE LOG
 
+## 2026-08-12 — Reproducible GitHub Release publishing workflow
+
+- Symptom: local release candidates had to be tagged and uploaded with ad-hoc GitHub CLI commands, while README download links and repository visibility text could remain on the previous release.
+- Resolution: add a guarded GitHub publisher with dry-run support, synchronized branch/version checks, manifest hash verification, annotated tag creation, deterministic asset upload and post-publication asset verification; update README and distribution documentation to the 0.5.30 release.
+- Safety: existing tags/releases are never overwritten; unsigned executables fail unless a maintainer explicitly supplies `-AllowUnsigned`, and release notes must retain the SmartScreen warning.
+- Verification: `npm run release:github -- -Version 0.5.30 -AllowUnsigned -DryRun`, root `npm run check`, remote commit/tag comparison and GitHub Release asset inspection.
+
 ## 2026-08-11 — Grok Build Desktop 0.5.30 local release candidate
 
 - Includes Codex-like session layout, ordered live reasoning/tool/answer flow, safe restoration of persisted `summary_text` reasoning, flat Plan/diff/review surfaces, framed Markdown tables, compact-window right-panel hiding, and navigable blue local paths with a context menu.
