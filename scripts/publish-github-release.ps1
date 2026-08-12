@@ -133,14 +133,22 @@ if ($head -ne $remoteHead) {
   throw "HEAD $head does not match origin/$branch $remoteHead. Push the release commit first."
 }
 
-$existingRelease = & gh release view $tag --json url 2>$null
-if ($LASTEXITCODE -eq 0) {
+$probeErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+  $existingRelease = & gh release view $tag --json url 2>$null
+  $existingReleaseExitCode = $LASTEXITCODE
+  $localTagCommit = & git rev-list -n 1 $tag 2>$null
+  $localTagExitCode = $LASTEXITCODE
+} finally {
+  $ErrorActionPreference = $probeErrorActionPreference
+}
+if ($existingReleaseExitCode -eq 0) {
   $releaseUrl = ($existingRelease | Out-String | ConvertFrom-Json).url
   throw "GitHub Release $tag already exists: $releaseUrl"
 }
 
-$localTagCommit = & git rev-list -n 1 $tag 2>$null
-if ($LASTEXITCODE -eq 0) {
+if ($localTagExitCode -eq 0) {
   $localTagCommit = ($localTagCommit | Out-String).Trim()
   if ($localTagCommit -ne $head) {
     throw "Local tag $tag points to $localTagCommit instead of HEAD $head."

@@ -44,6 +44,9 @@ if (!/Get-AuthenticodeSignature/.test(githubPublisher)) failures.push("GitHub pu
 if (!/AllowUnsigned/.test(githubPublisher)) failures.push("GitHub publisher must require an explicit unsigned override");
 if (!/release.*create.*\$tag/s.test(githubPublisher)) failures.push("GitHub publisher must create a tagged release");
 if (!/--verify-tag/.test(githubPublisher)) failures.push("GitHub publisher must verify the pushed tag");
+if (!/existingReleaseExitCode/.test(githubPublisher) || !/localTagExitCode/.test(githubPublisher)) {
+  failures.push("GitHub publisher must treat absent release/tag probes as expected state on Windows PowerShell 5");
+}
 if (!/release:github/.test(readme)) failures.push("README must document the GitHub release workflow");
 
 if (failures.length) {
