@@ -8,5 +8,6 @@ Public, versioned changes for Grok Build Desktop.
 - Added framed Markdown tables, flat tool/review surfaces and responsive right-panel hiding.
 - Added navigable local paths with folder actions.
 - Standardized source startup as `npm install` followed by `npm start`.
+- Added a centered English/Vietnamese language switch to both README pages.
 
 Release details are maintained in `docs/releases/0.5.30.md`.

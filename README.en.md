@@ -1,7 +1,7 @@
 # Grok Build
 
-<p align="right">
-  <a href="./README.md">🇻🇳 Tiếng Việt</a> · <strong>🇬🇧 English</strong>
+<p align="center">
+  <strong>🇬🇧 English</strong> | <a href="./README.md">🇻🇳 Tiếng Việt</a>
 </p>
 
 Grok Build is an Electron **agent desktop** powered by the **official Grok CLI** through ACP (`grok agent stdio`). It focuses on conversations, session management, code review, terminal access and task orchestration, while the agent loop, tools, authentication and sessions remain owned by Grok CLI.

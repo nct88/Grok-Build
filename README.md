@@ -1,7 +1,7 @@
 # Grok Build
 
-<p align="right">
-  <strong>🇻🇳 Tiếng Việt</strong> · <a href="./README.en.md">🇬🇧 English</a>
+<p align="center">
+  <a href="./README.en.md">🇬🇧 English</a> | <strong>🇻🇳 Tiếng Việt</strong>
 </p>
 
 Grok Build là ứng dụng **agent desktop** chạy trên Electron, sử dụng **Grok CLI chính thức** qua giao thức ACP (`grok agent stdio`). Ứng dụng tập trung vào trải nghiệm trò chuyện, quản lý phiên, duyệt thay đổi mã nguồn, terminal và điều phối công việc; vòng lặp agent, công cụ, xác thực và phiên làm việc vẫn do Grok CLI quản lý.

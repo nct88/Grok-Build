@@ -58,6 +58,9 @@ if (!/href=["']\.\/README\.en\.md["']/.test(readme)) {
 if (!/href=["']\.\/README\.md["']/.test(readmeEn)) {
   failures.push("English README must link back to README.md in its language switch");
 }
+const languageSwitch = /<p align="center">\s*(?:<strong>🇬🇧 English<\/strong>|<a href="\.\/README\.en\.md">🇬🇧 English<\/a>)\s*\|\s*(?:<strong>🇻🇳 Tiếng Việt<\/strong>|<a href="\.\/README\.md">🇻🇳 Tiếng Việt<\/a>)\s*<\/p>/;
+if (!languageSwitch.test(readme)) failures.push("Vietnamese README must use the centered English | Tiếng Việt switch");
+if (!languageSwitch.test(readmeEn)) failures.push("English README must use the centered English | Tiếng Việt switch");
 for (const [name, content] of [["Vietnamese README", readme], ["English README", readmeEn]]) {
   if (!content.includes(`**${version}**`)) failures.push(`${name} must display current version ${version}`);
   if (!content.includes(`/releases/tag/v${version}`)) failures.push(`${name} must link to release v${version}`);
