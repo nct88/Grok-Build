@@ -86,6 +86,13 @@ try {
   });
   await setWindowSize(1440, 900);
   await page.waitForSelector(".composer");
+  // Visual assertions below target the dark Codex reference. The application
+  // defaults to the host theme, so pin this isolated evidence profile instead
+  // of letting a light-mode CI runner change the expected palette.
+  await page.evaluate(async () => {
+    await globalThis.grokBuild.setTheme("dark");
+    document.documentElement.setAttribute("data-theme", "dark");
+  });
   await page.waitForTimeout(700);
 
   // Replace only the visual-run prompt handler. This keeps renderer submit and
