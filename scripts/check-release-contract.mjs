@@ -37,6 +37,9 @@ if (!pkg.scripts?.["release:github"]?.includes("publish-github-release.ps1")) {
 if (!/status.*--porcelain/s.test(githubPublisher)) failures.push("GitHub publisher must require a clean worktree");
 if (!/origin\/\$branch/.test(githubPublisher)) failures.push("GitHub publisher must compare HEAD with the remote branch");
 if (!/Assert-Hash/.test(githubPublisher)) failures.push("GitHub publisher must verify manifest hashes");
+if (!/require\('\.\/package-lock\.json'\)\.version/.test(githubPublisher)) {
+  failures.push("GitHub publisher must read package-lock through Node for Windows PowerShell 5 compatibility");
+}
 if (!/Get-AuthenticodeSignature/.test(githubPublisher)) failures.push("GitHub publisher must inspect executable signatures");
 if (!/AllowUnsigned/.test(githubPublisher)) failures.push("GitHub publisher must require an explicit unsigned override");
 if (!/release.*create.*\$tag/s.test(githubPublisher)) failures.push("GitHub publisher must create a tagged release");

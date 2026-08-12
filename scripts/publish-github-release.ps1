@@ -54,14 +54,14 @@ $notesPath = Join-Path $root "docs\releases\$Version.md"
 $manifest = Read-Json $manifestPath
 $rootPackage = Read-Json (Join-Path $root "package.json")
 $desktopPackage = Read-Json (Join-Path $root "apps\desktop\package.json")
-$lockFile = Read-Json (Join-Path $root "package-lock.json")
+$lockVersion = (Invoke-Native "node" @("-p", "require('./package-lock.json').version") | Out-String).Trim()
 $productVersion = (Get-Content -Raw -LiteralPath (Join-Path $root "product\VERSION")).Trim()
 
 $versions = [ordered]@{
   manifest = [string]$manifest.version
   package = [string]$rootPackage.version
   desktop = [string]$desktopPackage.version
-  lock = [string]$lockFile.version
+  lock = $lockVersion
   product = $productVersion
 }
 foreach ($entry in $versions.GetEnumerator()) {
