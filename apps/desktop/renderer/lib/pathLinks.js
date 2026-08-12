@@ -67,13 +67,24 @@
       count += 1;
     }
 
+    // Inline-code paths are common in agent answers. Keep fenced code blocks
+    // intact, but make a standalone inline path use the same open/copy menu.
+    for (const code of root.querySelectorAll("code:not(pre code)")) {
+      if (code.dataset.pathBound === "1") continue;
+      const path = trimTrailingPunctuation(code.textContent || "");
+      if (!looksLikePath(path)) continue;
+      code.dataset.pathBound = "1";
+      bindLink(code, path, handlers);
+      count += 1;
+    }
+
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     const textNodes = [];
     while (walker.nextNode()) textNodes.push(walker.currentNode);
 
     for (const node of textNodes) {
       const parent = node.parentElement;
-      if (!parent || parent.closest("a, button, pre, code, .cli-diff")) continue;
+      if (!parent || parent.closest("a, button, pre, .md-path-link, .cli-diff")) continue;
       const text = node.nodeValue || "";
       const segments = findSegments(text);
       if (!segments.length) continue;

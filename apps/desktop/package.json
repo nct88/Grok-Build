@@ -1,6 +1,6 @@
 {
     "name":  "@grok-build/desktop",
-    "version":  "0.5.30",
+    "version":  "0.5.32",
     "private":  true,
     "description":  "Grok Build agent desktop — thin Electron shell over grok agent stdio (no VS Code)",
     "main":  "src/main.cjs",
@@ -16,11 +16,9 @@
                     "pack":  "electron-builder --dir",
                     "dist":  "electron-builder --win portable nsis"
                 },
-    "dependencies":  {
-                         "@grok-build/acp-client":  "file:../../packages/acp-client",
-                         "@grok-build/sessions":  "file:../../packages/sessions"
-                     },
     "devDependencies":  {
+                            "@grok-build/acp-client":  "file:../../packages/acp-client",
+                            "@grok-build/sessions":  "file:../../packages/sessions",
                             "electron":  "43.3.0",
                             "electron-builder":  "26.15.3"
                         },

@@ -270,10 +270,25 @@
     <button type="button" role="menuitem" data-path-act="copy" data-i18n="pathCopy">Copy path</button>`;
   document.body.appendChild(pathCtx);
 
+  const sessionMoveMenu = document.createElement("div");
+  sessionMoveMenu.id = "sessionMoveMenu";
+  sessionMoveMenu.className = "media-ctx session-move-menu hidden";
+  sessionMoveMenu.setAttribute("role", "menu");
+  document.body.appendChild(sessionMoveMenu);
+
+  const sessionCtx = document.createElement("div");
+  sessionCtx.id = "sessionCtx";
+  sessionCtx.className = "media-ctx session-context-menu hidden";
+  sessionCtx.setAttribute("role", "menu");
+  document.body.appendChild(sessionCtx);
+
   /** @type {{ kind?: string, displayUrl?: string, filePath?: string, rawSrc?: string } | null} */
   let mediaActive = null;
   /** @type {{ path?: string, label?: string } | null} */
   let pathActive = null;
+  /** @type {{ id:string, title?:string, cwd?:string } | null} */
+  let sessionMoveActive = null;
+  let sessionContextText = "";
 
   function hideMediaCtx() {
     mediaCtx.classList.add("hidden");
@@ -283,14 +298,117 @@
     pathCtx.classList.add("hidden");
   }
 
+  function hideSessionMoveMenu() {
+    sessionMoveMenu.classList.add("hidden");
+    sessionMoveActive = null;
+  }
+
+  function hideSessionCtx() {
+    sessionCtx.classList.add("hidden");
+    sessionContextText = "";
+  }
+
+  function showSessionCtx(pos, itemText) {
+    hideMediaCtx();
+    hidePathCtx();
+    hideSessionMoveMenu();
+    const selection = String(globalThis.getSelection?.()?.toString() || "").trim();
+    sessionContextText = selection || String(itemText || "").trim();
+    sessionCtx.innerHTML = `
+      <button type="button" role="menuitem" data-session-act="copy">${escapeHtml(selection ? tt("copySelection", "Copy selection") : tt("copyContent", "Copy content"))}</button>
+      <button type="button" role="menuitem" data-session-act="copy-all">${escapeHtml(tt("copySession", "Copy session"))}</button>
+      <button type="button" role="menuitem" data-session-act="select-all">${escapeHtml(tt("selectAll", "Select all"))}</button>`;
+    sessionCtx.classList.remove("hidden");
+    const pad = 8;
+    const width = sessionCtx.offsetWidth || 210;
+    const height = sessionCtx.offsetHeight || 120;
+    let x = pos?.x ?? 0;
+    let y = pos?.y ?? 0;
+    if (x + width > window.innerWidth - pad) x = window.innerWidth - width - pad;
+    if (y + height > window.innerHeight - pad) y = window.innerHeight - height - pad;
+    sessionCtx.style.left = `${Math.max(pad, x)}px`;
+    sessionCtx.style.top = `${Math.max(pad, y)}px`;
+  }
+
+  function showSessionMoveMenu(sessionInfo, pos) {
+    hideMediaCtx();
+    hidePathCtx();
+    sessionMoveActive = sessionInfo || null;
+    sessionMoveMenu.replaceChildren();
+    const heading = document.createElement("div");
+    heading.className = "context-menu-heading";
+    heading.textContent = tt("moveChatTo", "Move chat to");
+    sessionMoveMenu.appendChild(heading);
+    const destinations = [
+      { label: tt("noProject", "No project"), value: "", cwd: getRecentsWorkspace() || "" },
+      ...projectListItems().map((p) => ({ label: basen(p), value: p, cwd: p })),
+    ];
+    for (const destination of destinations) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute("role", "menuitem");
+      button.textContent = destination.label;
+      button.title = destination.cwd || destination.label;
+      const currentCwd = sessionInfo?.cwd || "";
+      button.disabled = samePath(currentCwd, destination.cwd);
+      button.onclick = () => {
+        hideSessionMoveMenu();
+        void moveSessionToProject(sessionInfo, destination.value);
+      };
+      sessionMoveMenu.appendChild(button);
+    }
+    sessionMoveMenu.classList.remove("hidden");
+    const pad = 8;
+    const width = sessionMoveMenu.offsetWidth || 230;
+    const height = sessionMoveMenu.offsetHeight || 180;
+    let x = pos?.x ?? 0;
+    let y = pos?.y ?? 0;
+    if (x + width > window.innerWidth - pad) x = window.innerWidth - width - pad;
+    if (y + height > window.innerHeight - pad) y = window.innerHeight - height - pad;
+    sessionMoveMenu.style.left = `${Math.max(pad, x)}px`;
+    sessionMoveMenu.style.top = `${Math.max(pad, y)}px`;
+  }
+
+  async function moveSessionToProject(sessionInfo, targetProject) {
+    if (!sessionInfo?.id || !api.moveSession) return;
+    try {
+      const result = await api.moveSession(sessionInfo.id, targetProject || "");
+      const movedCwd = result?.workspace || result?.cwd || getRecentsWorkspace() || "";
+      sessionTabs?.updateSession?.(sessionInfo.id, { cwd: movedCwd });
+      if (activeSessionId === sessionInfo.id) {
+        const noProject = Boolean(result?.isRecents) || isRecentsPath(movedCwd);
+        await selectProject(noProject ? null : movedCwd, {
+          reconnect: false,
+          freshChat: false,
+        });
+        setStatus("starting", tt("movingChat", "Moving chat…"));
+        await api.loadSession(sessionInfo.id, movedCwd, connectOpts());
+        agentConnected = true;
+        await paintTranscript(sessionInfo.id);
+        setStatus("connected");
+      }
+      await refreshHistory();
+      addStep(
+        tt("chatMoved", "Chat moved to {project}").replace(
+          "{project}",
+          result?.isRecents ? tt("noProject", "No project") : basen(movedCwd),
+        ),
+      );
+    } catch (error) {
+      addMsg("error", error?.message || String(error));
+      setStatus("error");
+    }
+  }
+
   function resolveSessionPath(rawPath) {
     let value = String(rawPath || "").trim().replace(/^['"`]+|['"`]+$/g, "");
     value = value.replace(/^file:\/\//i, "").replace(/^\/([A-Za-z]:)/, "$1");
-    try {
-      value = decodeURIComponent(value);
-    } catch {
-      /* preserve literal path */
-    }
+    // Keep encoded Grok session directory names (for example E%3A%5Cprojects)
+    // intact. Decode only spaces commonly introduced by file links.
+    value = value.replace(/%20/gi, " ");
+    // Markdown file links may carry a source location suffix (:line or
+    // :line:column). Explorer/openPath needs the underlying filesystem path.
+    value = value.replace(/:(\d+)(?::\d+)?$/, "");
     if (!value || /^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(value)) return value;
     if (!workspaceRoot) return value;
     const root = String(workspaceRoot).replace(/[\\/]+$/, "");
@@ -300,6 +418,8 @@
 
   function showPathCtx(info, pos) {
     hideMediaCtx();
+    hideSessionCtx();
+    hideSessionMoveMenu();
     pathActive = info || null;
     pathCtx.classList.remove("hidden");
     const pad = 8;
@@ -387,6 +507,8 @@
 
   function showMediaCtx(info, pos) {
     hidePathCtx();
+    hideSessionCtx();
+    hideSessionMoveMenu();
     mediaActive = info || null;
     const copyBtn = mediaCtx.querySelector('[data-ctx="copy"]');
     if (copyBtn) {
@@ -494,11 +616,44 @@
     hidePathCtx();
     void pathAct(action);
   });
+  sessionCtx.addEventListener("click", (event) => {
+    const action = event.target?.closest?.("[data-session-act]")?.getAttribute("data-session-act");
+    if (!action) return;
+    const itemText = sessionContextText;
+    hideSessionCtx();
+    if (action === "select-all") {
+      const range = document.createRange();
+      range.selectNodeContents(timeline.querySelector(".tl-window") || timeline);
+      const selection = globalThis.getSelection?.();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      return;
+    }
+    const value =
+      action === "copy-all"
+        ? eventStore.items
+            .filter((item) => item.kind !== "empty" && item.kind !== "activity")
+            .map((item) => String(item.text || "").trim())
+            .filter(Boolean)
+            .join("\n\n")
+        : itemText;
+    if (value) void api.writeClipboardText?.(value);
+  });
+  timeline.addEventListener("contextmenu", (event) => {
+    if (event.target?.closest?.(".md-path-link, .media-interactive, .media-card")) return;
+    event.preventDefault();
+    const item = event.target?.closest?.(".tl-item");
+    showSessionCtx({ x: event.clientX, y: event.clientY }, item?.innerText || item?.textContent || "");
+  });
   document.addEventListener(
     "click",
     (e) => {
       if (!mediaCtx.classList.contains("hidden") && !mediaCtx.contains(e.target)) hideMediaCtx();
       if (!pathCtx.classList.contains("hidden") && !pathCtx.contains(e.target)) hidePathCtx();
+      if (!sessionMoveMenu.classList.contains("hidden") && !sessionMoveMenu.contains(e.target)) {
+        hideSessionMoveMenu();
+      }
+      if (!sessionCtx.classList.contains("hidden") && !sessionCtx.contains(e.target)) hideSessionCtx();
     },
     true,
   );
@@ -506,6 +661,8 @@
     if (e.key === "Escape") {
       if (!pathCtx.classList.contains("hidden")) hidePathCtx();
       else if (!mediaCtx.classList.contains("hidden")) hideMediaCtx();
+      else if (!sessionMoveMenu.classList.contains("hidden")) hideSessionMoveMenu();
+      else if (!sessionCtx.classList.contains("hidden")) hideSessionCtx();
       else if (!mediaLightbox.classList.contains("hidden")) hideMediaLightbox();
     }
   });
@@ -552,30 +709,40 @@
   const sessionTabs = globalThis.GrokSessionTabs?.create?.({
     root: $("sessionTabs"),
     onActivate: (tab, prev) => {
-      if (prev) {
-        sessionTabs.saveSnapshot(eventStore.items);
+      const skipPrevSnapshot = Boolean(tab.skipPrevSnapshot);
+      tab.skipPrevSnapshot = false;
+      if (prev && !skipPrevSnapshot) {
+        prev.items = sessionTabs.snapshotItems(eventStore.items);
       }
-      restoreStoreItems(tab.items || []);
       activeSessionId = tab.sessionId;
       convTitle.textContent = tab.title || "Conversation";
-      // Switch ACP session only when tab has a session and we're changing targets
-      if (
-        tab.sessionId &&
-        tab.sessionId !== prev?.sessionId &&
-        workspaceRoot &&
-        !(tab.items && tab.items.length)
-      ) {
-        void api
-          .loadSession?.(tab.sessionId, workspaceRoot, connectOpts())
-          .then(() => paintTranscript(tab.sessionId))
-          .catch(() => {
-            /* snapshot / empty ok */
-          });
-      } else if (tab.sessionId && tab.sessionId !== prev?.sessionId && workspaceRoot) {
-        // Keep process on this session without wiping UI snapshot
-        void api.loadSession?.(tab.sessionId, workspaceRoot, connectOpts()).catch(() => {});
-      }
-      scrollEnd(true);
+      // A tab owns its project. Align composer + sidebar before resuming so an
+      // old UI selection can never load or paint the session under a different cwd.
+      void (async () => {
+        const tabCwd = tab.cwd || "";
+        const noProject = isRecentsPath(tabCwd);
+        if (noProject) {
+          if (workspaceRoot) {
+            await selectProject(null, { reconnect: false, freshChat: false });
+          }
+        } else if (!samePath(tabCwd, workspaceRoot)) {
+          await selectProject(tabCwd, { reconnect: false, freshChat: false });
+        }
+        // A fast second tab click supersedes this activation.
+        if (sessionTabs.getActive() !== tab) return;
+        restoreStoreItems(tab.items || []);
+        scrollEnd(true);
+        if (!tab.sessionId || tab.sessionId === prev?.sessionId) return;
+        if (tab.deferLoad) return;
+        const loadCwd = noProject ? getRecentsWorkspace() || "" : tabCwd;
+        try {
+          await api.loadSession?.(tab.sessionId, loadCwd, connectOpts());
+          agentConnected = true;
+          if (!(tab.items && tab.items.length)) await paintTranscript(tab.sessionId);
+        } catch {
+          /* Keep the cached snapshot visible when an offline resume fails. */
+        }
+      })();
     },
     onNew: () => {
       void newChatTab(true);
@@ -584,7 +751,10 @@
 
   async function newChatTab(viaAgent) {
     sessionTabs.saveSnapshot(eventStore.items);
-    const tab = sessionTabs.addTab({ title: "New chat" }, true);
+    const tab = sessionTabs.addTab(
+      { title: "New chat", cwd: effectiveWorkspace() || null },
+      true,
+    );
     restoreStoreItems([]);
     showEmpty();
     if (viaAgent) {
@@ -594,6 +764,7 @@
         sessionTabs.updateActive({
           sessionId: activeSessionId,
           title: "New chat",
+          cwd: effectiveWorkspace() || null,
         });
       } catch (e) {
         addMsg("error", e.message || String(e));
@@ -1104,7 +1275,13 @@
       showEmpty();
       convTitle.textContent = tt("newConversation", "New conversation");
       sessionTabs?.addTab?.(
-        { title: tt("newConversation", "New conversation"), sessionId: null, items: [] },
+        {
+          title: tt("newConversation", "New conversation"),
+          sessionId: null,
+          cwd: effectiveWorkspace(next) || null,
+          items: [],
+          skipPrevSnapshot: true,
+        },
         true,
       );
     }
@@ -1312,7 +1489,7 @@
 
   function renderReviewList() {
     if (!reviews.length) {
-      reviewList.innerHTML = '<p class="muted-pad">Agent edits appear here with Review.</p>';
+      reviewList.innerHTML = `<p class="muted-pad">${escapeHtml(tt("agentEdits", "Agent edits appear here when files change."))}</p>`;
       return;
     }
     reviewList.innerHTML = "";
@@ -1323,7 +1500,7 @@
       const b = document.createElement("button");
       b.type = "button";
       b.className = "review-btn";
-      b.textContent = "Open";
+      b.textContent = tt("openReview", "Open");
       b.onclick = () => showDiff(r);
       row.appendChild(b);
       reviewList.appendChild(row);
@@ -3175,6 +3352,51 @@
       .toLowerCase();
   }
 
+  const PROJECT_DRAG_TYPE = "application/x-grok-build-project";
+  const SESSION_DRAG_TYPE = "application/x-grok-build-session";
+
+  function clearSidebarDragState() {
+    projectList?.querySelectorAll(".project-block.drag-over, .project-block.chat-drag-over")
+      .forEach((element) => element.classList.remove("drag-over", "chat-drag-over"));
+    document.querySelectorAll(".project-chat-item.dragging")
+      .forEach((element) => element.classList.remove("dragging"));
+  }
+
+  function draggedSession(event) {
+    try {
+      const raw = event.dataTransfer?.getData(SESSION_DRAG_TYPE) || "";
+      if (!raw) return null;
+      const session = JSON.parse(raw);
+      return session?.id ? session : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function bindSessionDrag(row, sessionInfo) {
+    row.draggable = true;
+    row.dataset.sessionId = sessionInfo.id || "";
+    row.setAttribute("aria-label", `${sessionInfo.title || tt("conversation", "Conversation")}. ${tt("dragChatHint", "Drag to another project to move")}`);
+    row.addEventListener("dragstart", (event) => {
+      event.stopPropagation();
+      row.classList.add("dragging");
+      row.setAttribute("aria-grabbed", "true");
+      const payload = JSON.stringify({
+        id: sessionInfo.id,
+        title: sessionInfo.title || "",
+        cwd: sessionInfo.cwd || "",
+      });
+      event.dataTransfer?.setData(SESSION_DRAG_TYPE, payload);
+      event.dataTransfer?.setData("text/plain", sessionInfo.title || sessionInfo.id);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+    });
+    row.addEventListener("dragend", (event) => {
+      event.stopPropagation();
+      row.setAttribute("aria-grabbed", "false");
+      clearSidebarDragState();
+    });
+  }
+
   /** Ordered project paths: first opened on top (bootstrap.recentProjects order). */
   function projectListItems() {
     const recent = (bootstrap?.recentProjects || []).filter(
@@ -3223,12 +3445,13 @@
         if (ev.target.closest("button")) return;
         void openHistorySession(s);
       };
+      bindSessionDrag(row, s);
       const actions = document.createElement("div");
       actions.className = "row-actions";
       const exp = document.createElement("button");
       exp.type = "button";
       exp.className = "mini";
-      exp.textContent = "Export";
+      exp.textContent = tt("exportChat", "Export");
       exp.onclick = async (ev) => {
         ev.stopPropagation();
         try {
@@ -3239,10 +3462,19 @@
           addMsg("error", e.message || String(e));
         }
       };
+      const move = document.createElement("button");
+      move.type = "button";
+      move.className = "mini";
+      move.textContent = tt("moveChat", "Move");
+      move.onclick = (ev) => {
+        ev.stopPropagation();
+        const rect = move.getBoundingClientRect();
+        showSessionMoveMenu(s, { x: rect.left, y: rect.bottom + 4 });
+      };
       const del = document.createElement("button");
       del.type = "button";
       del.className = "mini";
-      del.textContent = "Delete";
+      del.textContent = tt("deleteChat", "Delete");
       del.onclick = async (ev) => {
         ev.stopPropagation();
         if (!confirm(`Delete session ${s.title}?`)) return;
@@ -3253,7 +3485,7 @@
           addMsg("error", e.message || String(e));
         }
       };
-      actions.append(exp, del);
+      actions.append(exp, move, del);
       row.appendChild(actions);
       nest.appendChild(row);
     }
@@ -3278,7 +3510,24 @@
         (s.id === activeSessionId ? " active" : "");
       row.innerHTML = `<span class="project-chat-title">${escapeHtml(s.title)}</span>`;
       row.title = s.title || "";
-      row.onclick = () => void openHistorySession(s);
+      row.onclick = (event) => {
+        if (event.target.closest("button")) return;
+        void openHistorySession(s);
+      };
+      bindSessionDrag(row, s);
+      const actions = document.createElement("div");
+      actions.className = "row-actions";
+      const move = document.createElement("button");
+      move.type = "button";
+      move.className = "mini";
+      move.textContent = tt("moveChat", "Move");
+      move.onclick = (event) => {
+        event.stopPropagation();
+        const rect = move.getBoundingClientRect();
+        showSessionMoveMenu(s, { x: rect.left, y: rect.bottom + 4 });
+      };
+      actions.appendChild(move);
+      row.appendChild(actions);
       recentsList.appendChild(row);
     }
   }
@@ -3306,32 +3555,46 @@
     }
   }
 
-  function bindProjectDrag(block) {
-    block.draggable = true;
-    block.addEventListener("dragstart", (e) => {
+  function bindProjectDrag(block, handle) {
+    handle.draggable = true;
+    handle.addEventListener("dragstart", (e) => {
+      e.stopPropagation();
       block.classList.add("dragging");
-      e.dataTransfer?.setData("text/plain", block.dataset.projectPath || "");
-      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer?.setData(PROJECT_DRAG_TYPE, block.dataset.projectPath || "");
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
     });
-    block.addEventListener("dragend", () => {
+    handle.addEventListener("dragend", (e) => {
+      e.stopPropagation();
       block.classList.remove("dragging");
-      projectList?.querySelectorAll(".project-block.drag-over").forEach((el) => {
-        el.classList.remove("drag-over");
-      });
+      clearSidebarDragState();
     });
     block.addEventListener("dragover", (e) => {
+      const types = Array.from(e.dataTransfer?.types || []);
+      const hasSession = types.includes(SESSION_DRAG_TYPE);
+      const hasProject = types.includes(PROJECT_DRAG_TYPE);
+      if (!hasSession && !hasProject) return;
       e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      block.classList.add("drag-over");
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+      block.classList.toggle("chat-drag-over", hasSession);
+      block.classList.toggle("drag-over", hasProject);
     });
-    block.addEventListener("dragleave", () => {
-      block.classList.remove("drag-over");
+    block.addEventListener("dragleave", (e) => {
+      if (e.relatedTarget && block.contains(e.relatedTarget)) return;
+      block.classList.remove("drag-over", "chat-drag-over");
     });
     block.addEventListener("drop", (e) => {
       e.preventDefault();
-      block.classList.remove("drag-over");
-      const fromPath = e.dataTransfer?.getData("text/plain") || "";
       const toPath = block.dataset.projectPath || "";
+      const sessionInfo = draggedSession(e);
+      block.classList.remove("drag-over", "chat-drag-over");
+      if (sessionInfo) {
+        e.stopPropagation();
+        if (!samePath(sessionInfo.cwd, toPath)) {
+          void moveSessionToProject(sessionInfo, toPath);
+        }
+        return;
+      }
+      const fromPath = e.dataTransfer?.getData(PROJECT_DRAG_TYPE) || "";
       if (!fromPath || !toPath || samePath(fromPath, toPath)) return;
       const order = projectListItems();
       const fromIdx = order.findIndex((p) => samePath(p, fromPath));
@@ -3369,7 +3632,7 @@
         sessionsForProject(p),
         tt("noChatsShort", "No chats"),
       );
-      bindProjectDrag(block);
+      bindProjectDrag(block, b);
       projectList.appendChild(block);
     }
 
@@ -3448,7 +3711,13 @@
       planDock.classList.add("hidden");
       sessionTabs?.saveSnapshot?.(eventStore.items);
       sessionTabs?.addTab?.(
-        { title: s.title || "Chat", sessionId: s.id, items: [] },
+        {
+          title: s.title || "Chat",
+          sessionId: s.id,
+          cwd: cwd || null,
+          items: [],
+          deferLoad: true,
+        },
         true,
       );
       activeSessionId = s.id;
@@ -3462,6 +3731,8 @@
       sessionTabs?.updateActive?.({
         sessionId: s.id,
         title: s.title || "Chat",
+        cwd: loadCwd || null,
+        deferLoad: false,
       });
       convTitle.textContent = s.title || "Resumed conversation";
       setStatus("connected");
@@ -3740,7 +4011,13 @@
       setStatus(status?.dataset?.state || "disconnected");
     }
     if (workspaceRoot) setWorkspace(workspaceRoot);
-    else if ($("workspaceLabel")) $("workspaceLabel").textContent = tt("noProject", "No project");
+    else {
+      if ($("workspaceLabel")) $("workspaceLabel").textContent = tt("noProject", "No project");
+      renderProjects();
+      renderProjectMenu();
+      updateProjectChip();
+    }
+    renderReviewList();
     relocalizeTimeline();
     showEmpty();
     if (window.GrokIcons) window.GrokIcons.applyAll();
@@ -4453,7 +4730,10 @@
       case "tool":
       case "tool_update": {
         // CLI-like: each tool is its own expandable row (◇ Read… / Edit…)
-        const title = event.title || "Tool";
+        const rawTitle = String(event.title || "").trim();
+        const title = !rawTitle || /^(?:tool|tools)$/i.test(rawTitle)
+          ? tt("labelTools", "Tools")
+          : rawTitle;
         const status = event.status || (event.type === "tool" ? "running" : "done");
         const toolId = event.toolCallId || event.id || title;
         const diffs = event.diffs || [];
@@ -4545,6 +4825,7 @@
           title: event.resumed
             ? convTitle.textContent || "Resumed"
             : sessionTabs.getActive()?.title || "Chat",
+          cwd: effectiveWorkspace() || null,
         });
         if (event.resumed) {
           if (
@@ -4585,8 +4866,6 @@
     if (root) {
       bootstrap = await api.getBootstrap();
       if (bootstrap?.recentsWorkspace) recentsWorkspace = bootstrap.recentsWorkspace;
-      // pickWorkspace already persisted project; only update UI label here
-      setWorkspace(root);
     }
     return root;
   }
@@ -5746,7 +6025,7 @@
     });
   $("btnTermPickProject") &&
     ($("btnTermPickProject").onclick = async () => {
-      const root = await pickFolder();
+      const root = await pickFolderAndSelect();
       if (root) {
         setTermVisible(true);
         void ensureProjectShell({ force: true });
@@ -6358,7 +6637,7 @@
 
   api.onMenuCommand?.((msg) => {
     const cmd = msg?.cmd;
-    if (cmd === "openProject") void pickFolder();
+    if (cmd === "openProject") void pickFolderAndSelect();
     else if (cmd === "newSession") $("btnNew").click();
     else if (cmd === "settings") openSettings();
     else if (cmd === "toggleTheme") void toggleTheme();
@@ -6432,6 +6711,7 @@
     bootstrap = await api.getBootstrap();
     recentsWorkspace = bootstrap.recentsWorkspace || null;
     setWorkspace(bootstrap.workspaceRoot || null);
+    sessionTabs?.updateActive?.({ cwd: effectiveWorkspace() || null });
     updateProjectChip();
     applyAuthProfile(bootstrap.auth || { loggedIn: false });
     void refreshAuthProfile();

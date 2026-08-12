@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -327,6 +327,80 @@ export async function findSessionDirectory(options: {
     }
   }
   return undefined;
+}
+
+/**
+ * Move a persisted Grok session to another project directory.
+ *
+ * Grok groups sessions by encodeURIComponent(cwd), while summary.json is the
+ * source used by both the CLI and this desktop shell to identify the project.
+ * Keep those two pieces in sync and roll the directory move back if updating
+ * the summary fails.
+ */
+export async function moveLocalSession(options: {
+  sessionId: string;
+  targetCwd: string;
+  grokHome?: string;
+}): Promise<{ id: string; cwd: string; previousCwd: string; moved: boolean }> {
+  const sessionId = String(options.sessionId || "").trim();
+  const targetCwd = String(options.targetCwd || "").trim();
+  if (!sessionId || /[\\/]/.test(sessionId) || sessionId === "." || sessionId === "..") {
+    throw new Error("Invalid session id.");
+  }
+  if (!targetCwd) throw new Error("A target project folder is required.");
+
+  const sourceDir = await findSessionDirectory({
+    sessionId,
+    ...(options.grokHome ? { grokHome: options.grokHome } : {}),
+  });
+  if (!sourceDir) throw new Error("Session not found.");
+
+  const summaryPath = join(sourceDir, "summary.json");
+  const raw = await readFile(summaryPath, "utf8");
+  const summary = JSON.parse(raw) as SummaryJson;
+  const previousCwd = summary.info?.cwd ?? decodeURIComponent(sourceDir.split(/[\\/]/).at(-2) || "");
+  if (normalizePath(previousCwd) === normalizePath(targetCwd)) {
+    return { id: sessionId, cwd: targetCwd, previousCwd, moved: false };
+  }
+
+  const sessionsRoot = join(options.grokHome ?? join(homedir(), ".grok"), "sessions");
+  let targetRootName = encodeURIComponent(targetCwd);
+  try {
+    const roots = await readdir(sessionsRoot, { withFileTypes: true });
+    const existing = roots.find(
+      (entry) => entry.isDirectory() && normalizePath(decodeURIComponent(entry.name)) === normalizePath(targetCwd),
+    );
+    if (existing) targetRootName = existing.name;
+  } catch {
+    // mkdir below creates the session store on first use.
+  }
+  const targetRoot = join(sessionsRoot, targetRootName);
+  const targetDir = join(targetRoot, sessionId);
+  await mkdir(targetRoot, { recursive: true });
+  try {
+    await readFile(join(targetDir, "summary.json"), "utf8");
+    throw new Error("A session with this id already exists in the target project.");
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("already exists")) throw error;
+  }
+
+  await rename(sourceDir, targetDir);
+  try {
+    const nextSummary: SummaryJson = {
+      ...summary,
+      info: { ...(summary.info || {}), id: summary.info?.id ?? sessionId, cwd: targetCwd },
+      updated_at: new Date().toISOString(),
+    };
+    await writeFile(join(targetDir, "summary.json"), `${JSON.stringify(nextSummary, null, 2)}\n`, "utf8");
+  } catch (error) {
+    try {
+      await rename(targetDir, sourceDir);
+    } catch {
+      // Preserve the original error; the caller can report the exact failed session.
+    }
+    throw error;
+  }
+  return { id: sessionId, cwd: targetCwd, previousCwd, moved: true };
 }
 
 export async function runGrokCli(options: {

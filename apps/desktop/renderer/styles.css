@@ -605,6 +605,12 @@ body.resizing button { user-select: auto !important; cursor: inherit; }
   outline: 1px dashed var(--chip-border);
   outline-offset: 1px;
 }
+.project-block.chat-drag-over > .project-item {
+  background: var(--hover-strong);
+  color: var(--text);
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
+}
 /* Project title: dimmer than nested chat content — no default fill, hover only */
 .project-item {
   display: flex; align-items: center; gap: 8px;
@@ -644,8 +650,10 @@ body.resizing button { user-select: auto !important; cursor: inherit; }
 .project-chat-item {
   text-align: left; padding: 5px 8px; border-radius: var(--radius);
   color: var(--text); font-size: 12.5px; font-weight: 450;
-  border: 0; background: transparent; width: 100%; cursor: pointer;
+  border: 0; background: transparent; width: 100%; cursor: grab;
 }
+.project-chat-item:active { cursor: grabbing; }
+.project-chat-item.dragging { opacity: .45; }
 .project-chat-item .project-chat-title {
   display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -966,6 +974,15 @@ body.resizing button { user-select: auto !important; cursor: inherit; }
 }
 .media-ctx button:hover { background: var(--hover); }
 .media-ctx button.hidden { display: none !important; }
+.media-ctx button:disabled {
+  color: var(--text-3); cursor: default; opacity: .55;
+}
+.media-ctx button:disabled:hover { background: transparent; }
+.context-menu-heading {
+  padding: 6px 10px 5px; color: var(--text-3); font-size: 11px;
+  font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+}
+.session-move-menu { max-height: min(360px, calc(100vh - 16px)); overflow-y: auto; }
 
 /* Phase B6 — header status chip usage (compact) */
 .status-chip.usage { gap: 8px; max-width: 220px; }
@@ -1274,7 +1291,8 @@ body.resizing button { user-select: auto !important; cursor: inherit; }
   border-radius: 6px;
   color: var(--text-2);
   font-size: 13px;
-  user-select: none;
+  -webkit-user-select: text;
+  user-select: text;
 }
 .cli-line:hover { background: var(--hover); }
 .cli-line::-webkit-details-marker { display: none; }

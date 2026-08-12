@@ -30,11 +30,13 @@
       token(`<a href="${escapeText(href)}" title="${escapeText(href)}">${escapeText(label)}</a>`),
     );
     text = text.replace(
-      /\[([^\]]*)\]\((file:\/\/[^)\s]+|\/[^)\s]+|[A-Za-z]:[\\/][^)\s]+)\)/gi,
-      (_match, label, href) =>
-        token(
-          `<a href="${escapeText(href)}" class="md-path-link" title="${escapeText(href)}">${escapeText(label)}</a>`,
-        ),
+      /\[([^\]\n]*)\]\((<[^>\n]+>|file:\/\/[^)\n]+|(?:[A-Za-z]:[\\/]|\\\\|\/|\.\.?[\\/])[^)\n]+|[A-Za-z0-9_@()+.-]+[\\/][^)\n]+)\)/gi,
+      (_match, label, rawHref) => {
+        const href = String(rawHref).trim().replace(/^<|>$/g, "");
+        return token(
+          `<a href="${escapeText(href)}" class="md-path-link" title="${escapeText(href)}">${escapeText(label || href)}</a>`,
+        );
+      },
     );
     text = text.replace(/<(https?:\/\/[^>\s]+)>/gi, (_match, href) =>
       token(`<a href="${escapeText(href)}" title="${escapeText(href)}">${escapeText(href)}</a>`),

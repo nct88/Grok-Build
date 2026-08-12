@@ -62,12 +62,17 @@
       return status || "";
     }
 
+    function localizedToolTitle(value) {
+      const title = String(value || "").trim();
+      return !title || /^(?:tool|tools)$/i.test(title) ? t("labelTools", "Tools") : title;
+    }
+
     function toolGroupPreview(tools) {
       const list = tools || [];
       const running = list.some((x) => x.status === "running" || x.status === "pending");
       const done = list.filter((x) => x.status === "completed" || x.status === "done").length;
       const failed = list.filter((x) => x.status === "failed" || x.status === "error").length;
-      if (list.length <= 1) return list[0]?.title || t("labelTools", "Tools");
+      if (list.length <= 1) return localizedToolTitle(list[0]?.title);
       let s = t("toolsSteps", "{n} steps").replace("{n}", String(list.length));
       if (running) s += " · " + t("toolsRunningN", "{n} running").replace("{n}", String(list.filter((x) => x.status === "running" || x.status === "pending").length));
       else if (failed) s += " · " + t("toolsFailedN", "{n} failed").replace("{n}", String(failed));
@@ -693,7 +698,7 @@
         <span class="cli-mark" aria-hidden="true">${running ? "◆" : "◇"}</span>
         <span class="cli-line-title"></span>
       </summary><div class="cli-tool-body"></div>`;
-      row.querySelector(".cli-line-title").textContent = tool.title || t("labelTools", "Tools");
+      row.querySelector(".cli-line-title").textContent = localizedToolTitle(tool.title);
       fillToolBody(row.querySelector(".cli-tool-body"), { meta: tool, text: tool.title });
       return row;
     }
@@ -794,7 +799,7 @@
         d.open = Boolean(item.meta?.open) || running;
         d.dataset.itemId = String(item.id);
         d.dataset.status = status;
-        const title = item.text || item.meta?.title || t("labelTools", "Tools");
+        const title = localizedToolTitle(item.text || item.meta?.title);
         d.innerHTML = `<summary class="cli-line">
           <span class="cli-mark${running ? " spin-dot" : ""}" aria-hidden="true">${running ? "◆" : "◇"}</span>
           <span class="cli-line-title"></span>
@@ -931,7 +936,7 @@
         row.className = "tool-group-row";
         row.innerHTML = `
             <span class="tool-status" data-status="${escapeHtml(tool.status || "done")}"></span>
-            <span class="tool-group-row-title">${escapeHtml(tool.title || t("labelTools", "Tools"))}</span>
+            <span class="tool-group-row-title">${escapeHtml(localizedToolTitle(tool.title))}</span>
             <span class="tool-status-text">${escapeHtml(toolStatusLabel(tool.status))}</span>`;
         if (tool.path) {
           const rev = document.createElement("button");
@@ -1025,7 +1030,7 @@
           mark.classList.toggle("spin-dot", running);
         }
         const title = el.querySelector(".cli-line-title");
-        if (title) title.textContent = item.text || item.meta?.title || t("labelTools", "Tools");
+        if (title) title.textContent = localizedToolTitle(item.text || item.meta?.title);
         const metaEl = el.querySelector(".cli-line-meta");
         if (metaEl) {
           metaEl.textContent =

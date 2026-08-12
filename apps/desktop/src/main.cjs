@@ -2078,6 +2078,24 @@ app.whenReady().then(() => {
     });
   });
 
+  ipcMain.handle("agent:moveSession", async (_e, sessionId, targetWorkspace) => {
+    const id = String(sessionId || "").trim();
+    if (!id) throw new Error("Session id is required.");
+    const requested = typeof targetWorkspace === "string" ? targetWorkspace.trim() : "";
+    const { root, isRecents } = resolveConnectWorkspace(requested);
+    const active = getClient()?.sessionId === id;
+    // The Grok process can keep *.lock handles open on Windows. Stop it before
+    // relocating the active session, then let the renderer resume at the new cwd.
+    if (active) await getSupervisor().disconnectAll();
+    const mod = await loadSessions();
+    const result = await mod.moveLocalSession({
+      sessionId: id,
+      targetCwd: root,
+      grokHome: grokEnv().GROK_HOME,
+    });
+    return { ...result, active, isRecents, workspace: root };
+  });
+
   ipcMain.handle("agent:loadSession", async (_e, sessionId, workspaceRoot, options) => {
     // Prefer session's own cwd when provided; else recents / saved project
     const preferred =
@@ -2245,7 +2263,8 @@ app.whenReady().then(() => {
       resolved = assertMediaPreviewPath(normalizeIncomingMediaPath(target), workspacePathContext());
     }
     if (!fs.existsSync(resolved)) throw new Error("Path not found");
-    await shell.openPath(resolved);
+    const message = await shell.openPath(resolved);
+    if (message) return { ok: false, path: resolved, message };
     return { ok: true, path: resolved };
   });
 
@@ -2268,8 +2287,13 @@ app.whenReady().then(() => {
     if (!fs.existsSync(resolved)) {
       return { ok: false, message: "Path not found" };
     }
+    if (fs.statSync(resolved).isDirectory()) {
+      const message = await shell.openPath(resolved);
+      if (message) return { ok: false, message };
+      return { ok: true, path: resolved, openedDirectory: true };
+    }
     shell.showItemInFolder(resolved);
-    return { ok: true, path: resolved };
+    return { ok: true, path: resolved, openedDirectory: false };
   });
 
   ipcMain.handle("shell:openExternal", async (_e, url) => {

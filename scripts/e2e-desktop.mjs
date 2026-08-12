@@ -531,9 +531,16 @@ try {
       ),
   );
   if (hasTabChip) throw new Error("single tab should not render Chat chip");
-  tabs.addTab({ title: "Second" }, true);
+  tabs.addTab({ title: "Second", sessionId: "session-b", cwd: "D:\\projects\\beta" }, true);
   if (tabRoot.classList.contains("session-tabs-empty")) {
     throw new Error("expected multi-tab rail visible");
+  }
+  if (tabs.getActive()?.cwd !== "D:\\projects\\beta") {
+    throw new Error(`tab cwd was not retained: ${tabs.getActive()?.cwd}`);
+  }
+  tabs.updateSession("session-b", { cwd: "E:\\projects\\moved" });
+  if (tabs.getActive()?.cwd !== "E:\\projects\\moved") {
+    throw new Error(`moved session cwd was not synchronized: ${tabs.getActive()?.cwd}`);
   }
   ok("sessionTabs single vs multi");
 } catch (e) {
@@ -695,6 +702,12 @@ try {
   new Function(src)();
   const html = globalThis.GrokMarkdown.renderMarkdown("hi ![x](./a.png)");
   if (!/md-img|img /i.test(html)) throw new Error(html.slice(0, 120));
+  const spacedPathHtml = globalThis.GrokMarkdown.renderMarkdown(
+    "[report](<E:\\work\\project with spaces\\report.md:12>)",
+  );
+  if (!/md-path-link/.test(spacedPathHtml) || !/project with spaces/.test(spacedPathHtml)) {
+    throw new Error(`markdown path with spaces: ${spacedPathHtml}`);
+  }
   const tableSource = "| Name | State |\n|---|---|\n| Desktop | Ready |";
   const tableHtml = globalThis.GrokMarkdown.renderMarkdown(tableSource);
   if (!tableHtml.includes('class="md-table-wrap"') || !tableHtml.includes("<table>")) {

@@ -15,7 +15,7 @@
    */
   function createSessionTabs(opts) {
     const root = opts.root;
-    /** @type {Array<{ id: string, title: string, sessionId: string|null, items: any[], busy: boolean }>} */
+    /** @type {Array<{ id: string, title: string, sessionId: string|null, cwd: string|null, items: any[], busy: boolean }>} */
     let tabs = [];
     let activeId = null;
 
@@ -24,8 +24,11 @@
         id: `tab-${seq++}`,
         title: partial?.title || "Chat",
         sessionId: partial?.sessionId || null,
+        cwd: partial?.cwd || null,
         items: partial?.items || [],
         busy: false,
+        deferLoad: Boolean(partial?.deferLoad),
+        skipPrevSnapshot: Boolean(partial?.skipPrevSnapshot),
       };
     }
 
@@ -152,6 +155,17 @@
       render();
     }
 
+    function updateSession(sessionId, patch) {
+      let changed = false;
+      for (const tab of tabs) {
+        if (tab.sessionId !== sessionId) continue;
+        Object.assign(tab, patch);
+        changed = true;
+      }
+      if (changed) render();
+      return changed;
+    }
+
     function setBusy(id, busy) {
       const t = tabs.find((x) => x.id === id);
       if (t) {
@@ -188,6 +202,7 @@
       closeTab,
       activate,
       updateActive,
+      updateSession,
       setBusy,
       saveSnapshot,
       snapshotItems,

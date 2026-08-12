@@ -139,14 +139,14 @@ try {
       { content: "Xác minh Markdown sau khi kết thúc stream", status: "in_progress" },
     ] },
     { type: "thought_delta", messageId: "thought-1", text: "Đối chiếu định dạng reasoning summary trong chat_history.jsonl và xác định ranh giới dữ liệu an toàn." },
-    { type: "tool", toolCallId: "tool-1", title: "Đọc cấu trúc session Grok CLI", status: "running", kind: "read" },
-    { type: "tool_update", toolCallId: "tool-1", title: "Đọc cấu trúc session Grok CLI", status: "completed", kind: "read", detail: "reasoning.summary[] · assistant · tool_result", diffs: [{
+    { type: "tool", toolCallId: "tool-1", title: "Tool", status: "running", kind: "read" },
+    { type: "tool_update", toolCallId: "tool-1", title: "Tool", status: "completed", kind: "read", detail: "reasoning.summary[] · assistant · tool_result", diffs: [{
       path: "apps/desktop/renderer/styles.css",
       oldText: ".review-chip { background: var(--code-bg); border-radius: 8px; }",
       newText: ".review-chip { background: transparent; border-radius: 0; }",
     }] },
     { type: "thought_delta", messageId: "thought-2", text: "Giữ summary_text để hiển thị, không chuyển encrypted_content qua IPC hoặc renderer." },
-    { type: "assistant_delta", messageId: "answer-1", text: "Đã khôi phục **reasoning summary** theo đúng thứ tự session.\n\n## Kiểm tra hiển thị\n\n| Mục | Trạng thái |\n|---|---|\n| Markdown | Hoàn tất |\n\nTệp đầu ra: E:\\work\\grok-build\\dist\\Grok-Build.exe. Báo cáo: apps/desktop/renderer/styles.css.\n\nNội dung mã hóa vẫn được giữ ngoài giao diện." },
+    { type: "assistant_delta", messageId: "answer-1", text: "Đã khôi phục **reasoning summary** theo đúng thứ tự session.\n\n## Kiểm tra hiển thị\n\n| Mục | Trạng thái |\n|---|---|\n| Markdown | Hoàn tất |\n\nTệp đầu ra: E:\\work\\grok-build\\dist\\Grok-Build.exe. Báo cáo: apps/desktop/renderer/styles.css. [Báo cáo có khoảng trắng](<E:\\work\\grok build\\docs\\report.md:12>).\n\nNội dung mã hóa vẫn được giữ ngoài giao diện." },
   ]);
   await page.waitForFunction(() => {
     const answers = document.querySelectorAll(".msg.assistant");
@@ -336,6 +336,49 @@ try {
     }
   }
 
+  const spacedPathLink = page.locator(".md-path-link").filter({ hasText: "Báo cáo có khoảng trắng" }).first();
+  if (!(await spacedPathLink.count())) {
+    failures.push("Markdown path with spaces and line suffix was not hydrated");
+  } else {
+    await spacedPathLink.click();
+    await page.waitForTimeout(40);
+    const spacedActions = await electronApp.evaluate(() => globalThis.__codexPathActions || []);
+    if (!spacedActions.some((entry) => entry.action === "folder" && /grok build\\docs\\report\.md$/i.test(entry.target))) {
+      failures.push(`path line suffix was not stripped ${JSON.stringify(spacedActions)}`);
+    }
+  }
+
+  await page.locator(".msg.assistant").last().evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    node.dispatchEvent(new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      clientX: rect.left + 24,
+      clientY: rect.top + 24,
+    }));
+  });
+  await page.waitForTimeout(30);
+  const sessionMenu = await page.evaluate(() => {
+    const menu = document.querySelector("#sessionCtx");
+    const rect = menu?.getBoundingClientRect();
+    return {
+      visible: Boolean(menu && !menu.classList.contains("hidden")),
+      items: menu?.querySelectorAll("[data-session-act]").length || 0,
+      insideViewport: Boolean(rect && rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight),
+    };
+  });
+  if (!sessionMenu.visible || sessionMenu.items !== 3 || !sessionMenu.insideViewport) {
+    failures.push(`session context menu ${JSON.stringify(sessionMenu)}`);
+  } else {
+    await page.screenshot({ path: path.join(evidenceDir, "codex-session-copy-menu-dark-1440x900.png") });
+    await page.locator('#sessionCtx [data-session-act="copy"]').click();
+    await page.waitForTimeout(30);
+    const copyActions = await electronApp.evaluate(() => globalThis.__codexPathActions || []);
+    if (!copyActions.some((entry) => entry.action === "copy" && /Timeline hiện dùng/.test(entry.target))) {
+      failures.push(`session content was not copied ${JSON.stringify(copyActions.slice(-4))}`);
+    }
+  }
+
   await page.evaluate(() => {
     const firstTool = document.querySelector(".cli-tool");
     if (firstTool) firstTool.open = true;
@@ -354,6 +397,26 @@ try {
   await page.screenshot({ path: path.join(evidenceDir, "codex-session-light-1440x900.png") });
   await page.locator("#btnTheme").click();
   await page.waitForTimeout(120);
+
+  await page.locator("#btnLang").click();
+  await page.waitForTimeout(160);
+  const vietnameseSession = await page.evaluate(() => ({
+    genericTools: Array.from(document.querySelectorAll(".cli-tool .cli-line-title"))
+      .map((node) => node.textContent?.trim() || "")
+      .filter((text) => text === "Công cụ").length,
+    reviewButtons: Array.from(document.querySelectorAll(".review-chip .review-btn"))
+      .map((node) => node.textContent?.trim() || ""),
+    reviewTab: document.querySelector('.rtab[data-panel="review"]')?.textContent?.trim() || "",
+    reviewTitle: document.querySelector("#panelReview .panel-bar-title")?.textContent?.trim() || "",
+  }));
+  if (vietnameseSession.genericTools < 1) failures.push(`generic Tool was not localized ${JSON.stringify(vietnameseSession)}`);
+  if (!vietnameseSession.reviewButtons.length || vietnameseSession.reviewButtons.some((text) => text !== "Xem thay đổi")) {
+    failures.push(`Review buttons were not localized ${JSON.stringify(vietnameseSession)}`);
+  }
+  if (vietnameseSession.reviewTab !== "Xem thay đổi" || vietnameseSession.reviewTitle !== "Duyệt chỉnh sửa") {
+    failures.push(`Review panel was not localized ${JSON.stringify(vietnameseSession)}`);
+  }
+  await page.screenshot({ path: path.join(evidenceDir, "codex-session-vietnamese-dark-1440x900.png") });
 
   await setWindowSize(1000, 640);
   await emit([
