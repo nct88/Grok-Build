@@ -38,7 +38,7 @@ logo/fluffy-grok-master.png
 
 Release: `scripts/publish-release.ps1` runs the icon generator automatically.
 
-## Dev (`npm run desktop`)
+## Dev (`npm start`)
 
 Windows taskbar icons are tied to the **process EXE name**. Stock `electron.exe` is heavily cached.
 
@@ -46,7 +46,7 @@ Dev launch now uses a **stamped copy**:
 
 ```text
 …/electron/dist/GrokBuild-dev.exe   ← icon.ico stamped via rcedit
-npm run desktop  →  node build/run-dev.cjs  →  GrokBuild-dev.exe .
+npm start  →  npm run desktop  →  node build/run-dev.cjs  →  GrokBuild-dev.exe .
 ```
 
 ```powershell
@@ -54,7 +54,7 @@ npm run desktop  →  node build/run-dev.cjs  →  GrokBuild-dev.exe .
 powershell -File scripts/apply-app-icon.ps1
 
 # That stamps:
-#   - Dev host GrokBuild-dev.exe (npm run desktop)
+#   - Dev host GrokBuild-dev.exe (npm start)
 #   - Installed %LOCALAPPDATA%\Programs\Grok Build\Grok Build.exe
 #   - Desktop + Start Menu shortcuts
 
@@ -63,7 +63,7 @@ powershell -File scripts/refresh-win-icon-cache.ps1
 # Unpin Grok from taskbar, open again, re-pin.
 ```
 
-**Note:** Desktop shortcut often targets the *installed* app, not `npm run desktop`.  
+**Note:** Desktop shortcut often targets the *installed* app, not `npm start`.
 Stamping only `electron.exe` will not change that shortcut.
 
 ## Windows note

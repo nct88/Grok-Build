@@ -28,7 +28,7 @@ enterprise distribution:
 2. Sign `Grok Build.exe`, Setup, and portable wrappers **after** packaging (do **not** rcedit the NSIS/portable 7z wrappers — destroys payload; only stamp the app exe via `afterPack`).
 3. Optional: submit to Microsoft SmartScreen portal for reputation.
 
-Until then: document the warning in release notes and keep `docs/COMPLETE.md` honest about unsigned status.
+Until then, document the warning in the versioned release notes and `CHANGELOG.md`.
 
 ## Build an immutable local candidate
 

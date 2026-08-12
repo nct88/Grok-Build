@@ -230,10 +230,10 @@ if (Test-Path $verFile) {
 '@
 Set-Content -Path (Join-Path $updateDir "apply-update.ps1") -Value $applyUpdate -Encoding UTF8
 
-# FIX_LOG head into update
-$fixLog = Join-Path $root "fix-bug\FIX_LOG.md"
-if (Test-Path $fixLog) {
-  Copy-Item -Force $fixLog (Join-Path $updateDir "FIX_LOG.md")
+# Public changelog into update
+$changeLog = Join-Path $root "CHANGELOG.md"
+if (Test-Path $changeLog) {
+  Copy-Item -Force $changeLog (Join-Path $updateDir "CHANGELOG.md")
 }
 
 # README per channel

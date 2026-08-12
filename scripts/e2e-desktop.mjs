@@ -417,13 +417,13 @@ try {
   fail("productPaths", e);
 }
 
-// Version consistency (docs ↔ package)
+// Version consistency (changelog/release notes ↔ package)
 try {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   const ver = pkg.version;
-  const complete = fs.readFileSync(path.join(root, "docs/COMPLETE.md"), "utf8");
-  if (!complete.includes(ver)) {
-    throw new Error(`docs/COMPLETE.md missing version ${ver}`);
+  const changelog = fs.readFileSync(path.join(root, "CHANGELOG.md"), "utf8");
+  if (!changelog.includes(`## ${ver}`)) {
+    throw new Error(`CHANGELOG.md missing version ${ver}`);
   }
   const productVer = fs
     .readFileSync(path.join(root, "product/VERSION"), "utf8")

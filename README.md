@@ -133,7 +133,7 @@ ZIP phù hợp hơn portable EXE nếu sử dụng hằng ngày vì không phả
 git clone https://github.com/nct88/Grok-Build.git
 cd Grok-Build
 npm install
-npm run desktop
+npm start
 ```
 
 Lệnh tương đương trên Windows:
@@ -146,7 +146,8 @@ Các lệnh thường dùng:
 
 | Lệnh | Công dụng |
 |---|---|
-| `npm run desktop` | Build các package và chạy Electron Desktop |
+| `npm start` | Build các package và chạy Electron Desktop |
+| `npm run desktop` | Alias tương thích của `npm start` |
 | `npm run build` | Build ACP client và session package |
 | `npm run icons` | Sinh/stamp bộ icon Desktop |
 | `npm run check` | Chạy toàn bộ cổng architecture, packaging, brand, test và visual |
@@ -278,7 +279,7 @@ Grok-Build/
 ├─ logo/                   Nguồn và ma trận icon đã xử lý
 ├─ scripts/                Dev, test, kiểm tra và release automation
 ├─ docs/                   Kiến trúc, phân phối, roadmap và release notes
-├─ fix-bug/                Lịch sử sửa lỗi/thay đổi
+├─ CHANGELOG.md            Thay đổi theo phiên bản
 └─ dist/                   Artifact build cục bộ, thường không commit
 ```
 
@@ -327,10 +328,11 @@ Tính năng video yêu cầu tài khoản cho phép lưu dữ liệu coding (`co
 | Tài liệu | Nội dung |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Ranh giới kiến trúc và module chính |
-| [`docs/COMPLETE.md`](docs/COMPLETE.md) | Trạng thái phiên bản và feature inventory |
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Cài dependency, chạy source và kiểm tra |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Ship line và hướng phát triển tiếp theo |
 | [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) | Kênh phát hành, signing và SmartScreen |
 | [`docs/INSTALL_PATHS.md`](docs/INSTALL_PATHS.md) | Đường dẫn cài Desktop/IDE |
+| [`CHANGELOG.md`](CHANGELOG.md) | Thay đổi theo phiên bản |
 
 ## Đóng góp
 

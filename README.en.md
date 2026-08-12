@@ -133,7 +133,7 @@ The ZIP is preferable to the portable EXE for daily use because it does not self
 git clone https://github.com/nct88/Grok-Build.git
 cd Grok-Build
 npm install
-npm run desktop
+npm start
 ```
 
 Equivalent Windows command:
@@ -146,7 +146,8 @@ Common commands:
 
 | Command | Purpose |
 |---|---|
-| `npm run desktop` | Build packages and run Electron Desktop |
+| `npm start` | Build packages and run Electron Desktop |
+| `npm run desktop` | Compatibility alias for `npm start` |
 | `npm run build` | Build the ACP client and sessions package |
 | `npm run icons` | Generate and stamp Desktop icons |
 | `npm run check` | Run architecture, packaging, brand, tests and visual gates |
@@ -278,7 +279,7 @@ Grok-Build/
 ├─ logo/                   Source and processed icon matrix
 ├─ scripts/                Development, tests, checks and release automation
 ├─ docs/                   Architecture, distribution, roadmap and release notes
-├─ fix-bug/                Fix/change history
+├─ CHANGELOG.md            Versioned product changes
 └─ dist/                   Local build artifacts, normally not committed
 ```
 
@@ -327,10 +328,11 @@ The application checks Settings, `GROK_BUILD_IDE`, default installation paths an
 | Document | Content |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture boundaries and main modules |
-| [`docs/COMPLETE.md`](docs/COMPLETE.md) | Version status and feature inventory |
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Install dependencies, run source and verify |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Ship line and future direction |
 | [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) | Release channels, signing and SmartScreen |
 | [`docs/INSTALL_PATHS.md`](docs/INSTALL_PATHS.md) | Desktop/IDE installation paths |
+| [`CHANGELOG.md`](CHANGELOG.md) | Versioned product changes |
 
 ## Contributing
 

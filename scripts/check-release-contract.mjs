@@ -15,12 +15,13 @@ const releaseTemplate = read("docs/releases/TEMPLATE.md");
 const license = read("LICENSE");
 const readme = read("README.md");
 const readmeEn = read("README.en.md");
+const changelog = read("CHANGELOG.md");
 
 const failures = [];
 if (pkg.version !== version || desktop.version !== version) {
   failures.push(`version mismatch: root=${pkg.version}, desktop=${desktop.version}, product=${version}`);
 }
-if (!read("docs/COMPLETE.md").includes(version)) failures.push(`docs/COMPLETE.md missing ${version}`);
+if (!changelog.includes(`## ${version}`)) failures.push(`CHANGELOG.md missing ${version}`);
 if (packaging.versionSource !== "product/VERSION") failures.push("packaging.json must use product/VERSION");
 if (packaging.immutableVersions !== true) failures.push("packaging.json must declare immutableVersions");
 if (packaging.license !== "LICENSE") failures.push("packaging.json must identify LICENSE");

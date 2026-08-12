@@ -13,5 +13,5 @@ Get-ChildItem $cache -Filter "iconcache*" -ErrorAction SilentlyContinue | Remove
 Get-ChildItem $cache -Filter "thumbcache_*" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 # Rebuild
 Start-Process explorer.exe
-Write-Host "Done. Re-run: npm run desktop"
+Write-Host "Done. Re-run: npm start"
 Write-Host "If taskbar still wrong: unpin any Grok/Electron pin, then re-pin after launch."
