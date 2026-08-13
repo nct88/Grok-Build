@@ -85,16 +85,26 @@
       <div class="work-row" id="workRow">
         <section class="col conversation" id="colConv">
           <header class="conv-header">
-            <div class="conv-title-wrap">
-              <h1 id="convTitle" class="conv-title">New conversation</h1>
-              <p id="workspaceLabel" class="conv-sub" data-i18n="noProject">No project</p>
-              <div id="gitStrip" class="git-strip hidden" title="Git status">
-                <span class="git-branch" id="gitBranch">—</span>
-                <span class="git-hash hidden" id="gitHash"></span>
-                <span class="git-dirty hidden" id="gitDirty"></span>
-                <span class="git-sync hidden" id="gitSync"></span>
-                <a class="git-pr hidden" id="gitPr" href="#" target="_blank" rel="noreferrer"></a>
-                <button type="button" class="git-pr-create hidden" id="gitPrCreate" title="Open create PR in browser">Create PR</button>
+            <div class="conv-header-left">
+              <div class="chip-dd chip-dd-header" id="ddProject">
+                <button type="button" class="chip-btn chip-project" id="btnProject" aria-haspopup="listbox" aria-expanded="false" title="Project">
+                  <span class="chip-ico" data-icon="folder" data-icon-size="14" aria-hidden="true"></span>
+                  <span class="chip-label" id="projectChipLabel" data-i18n="noProject">No project</span>
+                  <span class="chip-caret" data-icon="caret" data-icon-size="12" aria-hidden="true"></span>
+                </button>
+                <div class="chip-menu hidden" id="menuProject" role="listbox" aria-label="Projects"></div>
+              </div>
+              <div class="conv-title-wrap">
+                <h1 id="convTitle" class="conv-title">New conversation</h1>
+                <p id="workspaceLabel" class="conv-sub" data-i18n="noProject">No project</p>
+                <div id="gitStrip" class="git-strip hidden" title="Git status">
+                  <span class="git-branch" id="gitBranch">—</span>
+                  <span class="git-hash hidden" id="gitHash"></span>
+                  <span class="git-dirty hidden" id="gitDirty"></span>
+                  <span class="git-sync hidden" id="gitSync"></span>
+                  <a class="git-pr hidden" id="gitPr" href="#" target="_blank" rel="noreferrer"></a>
+                  <button type="button" class="git-pr-create hidden" id="gitPrCreate" title="Open create PR in browser">Create PR</button>
+                </div>
               </div>
             </div>
             <div class="conv-actions">
@@ -117,6 +127,7 @@
               </div>
             </div>
           </header>
+          <p id="cliUpdateBanner" class="cli-update-banner hidden" role="status"></p>
 
           <div id="sessionTabs" class="session-tabs" aria-label="Sessions"></div>
           <div id="agentSlots" class="agent-slots hidden" aria-label="Agent slots"></div>
@@ -152,14 +163,6 @@
                   <button id="btnAttach" class="ghost-icon" type="button" data-i18n-title="attach" data-i18n-aria="attach" title="Attach files" aria-label="Attach">
                     <span data-icon="paperclip" data-icon-size="18"></span>
                   </button>
-                  <div class="chip-dd" id="ddProject">
-                    <button type="button" class="chip-btn chip-project" id="btnProject" aria-haspopup="listbox" aria-expanded="false" title="Project">
-                      <span class="chip-ico" data-icon="folder" data-icon-size="14" aria-hidden="true"></span>
-                      <span class="chip-label" id="projectChipLabel" data-i18n="noProject">No project</span>
-                      <span class="chip-caret" data-icon="caret" data-icon-size="12" aria-hidden="true"></span>
-                    </button>
-                    <div class="chip-menu hidden" id="menuProject" role="listbox" aria-label="Projects"></div>
-                  </div>
                   <div class="chip-dd" id="ddPermission">
                     <button type="button" class="chip-btn chip-perm" id="btnPermission" aria-haspopup="listbox" aria-expanded="false">
                       <span class="chip-ico" id="permIco" data-icon="circleDot" data-icon-size="14" aria-hidden="true"></span>
@@ -193,25 +196,58 @@
                       <div id="menuModelOpts"></div>
                     </div>
                     <select id="selModel" class="sr-only" tabindex="-1" aria-hidden="true">
-                      <option value="grok-4.5" selected>grok-4.5 (default)</option>
+                      <option value="grok-4.6" selected>grok-4.6</option>
                     </select>
                   </div>
                   <div class="chip-dd" id="ddEffort">
                     <button type="button" class="chip-btn chip-effort" id="btnEffort" aria-haspopup="listbox" aria-expanded="false">
                       <span class="chip-ico" data-icon="effort" data-icon-size="14" aria-hidden="true"></span>
-                      <span class="chip-label" id="effortLabel">Effort</span>
+                      <span class="chip-label" id="effortLabel">High</span>
                       <span class="chip-caret" data-icon="caret" data-icon-size="12" aria-hidden="true"></span>
                     </button>
                     <div class="chip-menu hidden" id="menuEffort" role="listbox">
                       <div id="menuEffortOpts"></div>
                     </div>
                     <select id="selEffort" class="sr-only" tabindex="-1" aria-hidden="true">
-                      <option value="">System default</option>
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>
-                      <option value="high">High</option>
+                      <option value="high" selected>High</option>
                       <option value="xhigh">xHigh</option>
                     </select>
+                  </div>
+                  <div class="chip-dd" id="ddUsage">
+                    <button type="button" class="chip-btn chip-usage" id="btnUsage" aria-haspopup="dialog" aria-expanded="false" data-i18n-title="usage" title="Usage">
+                      <span class="chip-ico" data-icon="gauge" data-icon-size="14" aria-hidden="true"></span>
+                      <span class="chip-label" id="usageComposerLabel" data-i18n="usage">Usage</span>
+                      <span class="chip-caret" data-icon="caret" data-icon-size="12" aria-hidden="true"></span>
+                    </button>
+                    <div class="chip-menu chip-menu-usage hidden" id="menuUsage" role="dialog" aria-label="Usage">
+                      <div class="usage-stack usage-popover" id="usagePopover" aria-live="polite">
+                        <div class="usage-card">
+                          <div class="usage-card-head">
+                            <h4 class="usage-card-title" data-i18n="sessionUsage">This session</h4>
+                            <p class="usage-card-sub js-usage-session-sub" data-i18n="sessionUsageSub">Since start or last resume</p>
+                          </div>
+                          <div class="usage-rows js-usage-session-rows"></div>
+                          <p class="usage-empty hidden js-usage-session-empty" data-i18n="noSessionUsage">No model usage in this session yet.</p>
+                        </div>
+                        <div class="usage-card">
+                          <div class="usage-card-head">
+                            <h4 class="usage-card-title js-usage-plan-title" data-i18n="planLimit">Plan limit</h4>
+                            <p class="usage-card-sub js-usage-plan-pct">—</p>
+                          </div>
+                          <div class="usage-bar-wrap js-usage-plan-bar-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                            <div class="usage-bar js-usage-plan-bar" style="width:0%"></div>
+                          </div>
+                          <div class="usage-rows js-usage-plan-rows"></div>
+                        </div>
+                        <p class="usage-meta js-usage-meta"></p>
+                      </div>
+                      <div class="usage-pop-actions">
+                        <button type="button" class="pill-btn accent js-refresh-usage" id="btnPopRefreshUsage"><span data-icon="refresh" data-icon-size="14"></span> <span data-i18n="refreshUsage">Refresh</span></button>
+                        <button type="button" class="pill-btn js-manage-billing" id="btnPopManageBilling"><span data-icon="external" data-icon-size="14"></span> <span data-i18n="manageBilling">Manage billing</span></button>
+                      </div>
+                    </div>
                   </div>
                   <div class="chip-dd hidden" id="ctlMode">
                     <button type="button" class="chip-btn" id="btnMode" aria-haspopup="listbox" aria-expanded="false">
@@ -738,7 +774,12 @@
                   <span data-i18n="grokCli">Grok CLI</span>
                   <input id="inpExecutable" type="text" readonly class="field-readonly" />
                 </label>
-                <p class="field-hint" data-i18n="grokCliHint">Resolved from PATH, ~/.grok/bin, or GROK_EXECUTABLE.</p>
+                <p class="field-hint" id="cliVersionHint" data-i18n="grokCliHint">Resolved from PATH, ~/.grok/bin, or GROK_EXECUTABLE.</p>
+                <div class="settings-actions">
+                  <button id="btnCheckCliUpdate" class="pill-btn" type="button" data-i18n="checkCliUpdates">Check CLI updates</button>
+                  <button id="btnUpdateCli" class="pill-btn accent hidden" type="button" data-i18n="updateCli">Update Grok CLI</button>
+                </div>
+                <p class="field-hint" id="cliUpdateHint"></p>
                 <label class="field">
                   <span data-i18n="workspace">Project folder</span>
                   <input id="inpWorkspace" type="text" readonly class="field-readonly" />
@@ -893,6 +934,7 @@
                 <div class="settings-group-title" data-i18n="app">App</div>
                 <div class="settings-actions">
                   <button id="btnCheckUpdate" class="pill-btn" type="button" data-i18n="checkUpdates">Check for updates</button>
+                  <button id="btnCheckCliUpdateAccount" class="pill-btn" type="button" data-i18n="checkCliUpdates">Check CLI updates</button>
                   <button id="btnAbout" class="pill-btn" type="button" data-i18n="about">About</button>
                 </div>
                 <p class="field-hint" data-i18n="shortcuts">Shortcuts: Ctrl+Enter send · Ctrl+N new · Ctrl+L prompt · Ctrl+, settings · Ctrl+T terminal · Esc cancel</p>
@@ -906,22 +948,22 @@
                 <div class="usage-card" id="usageSessionCard">
                   <div class="usage-card-head">
                     <h4 class="usage-card-title" data-i18n="sessionUsage">This session</h4>
-                    <p class="usage-card-sub" data-i18n="sessionUsageSub">Since start or last resume</p>
+                    <p class="usage-card-sub js-usage-session-sub" data-i18n="sessionUsageSub">Since start or last resume</p>
                   </div>
-                  <div class="usage-rows" id="usageSessionRows"></div>
-                  <p class="usage-empty hidden" id="usageSessionEmpty" data-i18n="noSessionUsage">No model usage in this session yet.</p>
+                  <div class="usage-rows js-usage-session-rows" id="usageSessionRows"></div>
+                  <p class="usage-empty hidden js-usage-session-empty" id="usageSessionEmpty" data-i18n="noSessionUsage">No model usage in this session yet.</p>
                 </div>
                 <div class="usage-card" id="usagePlanCard">
                   <div class="usage-card-head">
-                    <h4 class="usage-card-title" id="usagePlanTitle" data-i18n="planLimit">Plan limit</h4>
-                    <p class="usage-card-sub" id="usagePlanPct">—</p>
+                    <h4 class="usage-card-title js-usage-plan-title" id="usagePlanTitle" data-i18n="planLimit">Plan limit</h4>
+                    <p class="usage-card-sub js-usage-plan-pct" id="usagePlanPct">—</p>
                   </div>
-                  <div class="usage-bar-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="usagePlanBarWrap">
-                    <div class="usage-bar" id="usagePlanBar" style="width:0%"></div>
+                  <div class="usage-bar-wrap js-usage-plan-bar-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="usagePlanBarWrap">
+                    <div class="usage-bar js-usage-plan-bar" id="usagePlanBar" style="width:0%"></div>
                   </div>
-                  <div class="usage-rows" id="usagePlanRows"></div>
+                  <div class="usage-rows js-usage-plan-rows" id="usagePlanRows"></div>
                 </div>
-                <p class="usage-meta" id="usageMeta"></p>
+                <p class="usage-meta js-usage-meta" id="usageMeta"></p>
               </div>
               <div class="settings-actions">
                 <button id="btnRefreshUsage" class="pill-btn accent" type="button"><span data-icon="refresh" data-icon-size="14"></span> <span data-i18n="refreshUsage">Refresh</span></button>

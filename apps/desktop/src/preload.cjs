@@ -57,8 +57,10 @@ contextBridge.exposeInMainWorld("grokBuild", {
   writeClipboardText: (text) => ipcRenderer.invoke("clipboard:writeText", text),
   openIde: (opts) => ipcRenderer.invoke("app:openIde", opts || {}),
   getIdeStatus: () => ipcRenderer.invoke("app:getIdeStatus"),
-  // Models (CLI `grok models`)
+  // Models (CLI `grok models`) + CLI self-update
   listModels: () => ipcRenderer.invoke("app:listModels"),
+  cliStatus: () => ipcRenderer.invoke("app:cliStatus"),
+  updateCli: () => ipcRenderer.invoke("app:updateCli"),
   // Phase D
   health: () => ipcRenderer.invoke("app:health"),
   controlPlane: () => ipcRenderer.invoke("app:controlPlane"),

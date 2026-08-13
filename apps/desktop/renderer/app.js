@@ -39,6 +39,8 @@
   const composerEl = document.querySelector(".composer");
 
   let workspaceRoot = null;
+  /** Last cwd the agent process actually connected to */
+  let agentWorkspace = null;
   /** Agent cwd for "No project" chats — from bootstrap.recentsWorkspace */
   let recentsWorkspace = null;
   let busy = false;
@@ -1227,6 +1229,19 @@
     }
   }
 
+  function currentChatIsEmpty() {
+    const tab = sessionTabs?.getActive?.();
+    if (tab?.sessionId) return false;
+    const items = eventStore.items || [];
+    return items.every((it) => it.kind === "empty" || it.kind === "step");
+  }
+
+  function bindActiveTabWorkspace(root) {
+    sessionTabs?.updateActive?.({
+      cwd: root ? effectiveWorkspace(root) : getRecentsWorkspace() || null,
+    });
+  }
+
   /**
    * Switch UI project (null = No project / Recents). Optionally reconnect agent.
    * @param {string|null} root
@@ -1237,6 +1252,7 @@
     const reconnect = opts.reconnect !== false;
     const freshChat = opts.freshChat !== false;
     if (samePath(next, workspaceRoot)) {
+      bindActiveTabWorkspace(next);
       renderProjects();
       renderProjectMenu();
       updateProjectChip();
@@ -1264,7 +1280,12 @@
         }
       }
     }
-    if (freshChat) {
+    const active = sessionTabs?.getActive?.();
+    const activeCwd = active?.cwd || "";
+    const switchingProjects =
+      Boolean(next) && !isRecentsPath(activeCwd) && !samePath(activeCwd, next);
+    const openFresh = freshChat && (switchingProjects || !currentChatIsEmpty());
+    if (openFresh) {
       sessionTabs?.saveSnapshot?.(eventStore.items);
       resetTimeline();
       activeSessionId = null;
@@ -1284,6 +1305,8 @@
         },
         true,
       );
+    } else {
+      bindActiveTabWorkspace(next);
     }
     void refreshHistory();
     if (reconnect && (agentConnected || busy)) {
@@ -2951,11 +2974,13 @@
     const effortVal = selEffort?.value || "";
     const models = realSelectOptions(selModel);
     const efforts = realSelectOptions(selEffort);
-    const modelTxt = modelVal
-      ? optionText(selModel, modelVal) || modelVal
-      : models.length === 1
-        ? models[0].textContent || models[0].value
-        : "";
+    const modelTxt = displayModelName(
+      modelVal
+        ? optionText(selModel, modelVal) || modelVal
+        : models.length === 1
+          ? models[0].textContent || models[0].value
+          : "",
+    );
     const effortTxt = effortVal
       ? optionText(selEffort, effortVal) || effortVal
       : efforts.length === 1
@@ -3006,7 +3031,7 @@
         b.type = "button";
         b.role = "option";
         b.dataset.value = o.value;
-        b.textContent = o.value ? o.textContent || o.value : "System default";
+        b.textContent = o.value ? displayModelName(o.textContent || o.value) : "System default";
         b.setAttribute(
           "aria-selected",
           (o.value === selModel.value || (onlyOne && o.value === models[0]?.value)) ? "true" : "false",
@@ -3039,8 +3064,36 @@
     }
   }
 
-  /** Known product default when CLI not yet connected */
-  const PRODUCT_DEFAULT_MODEL = "grok-4.5";
+  /** Known product default when CLI not yet connected — live `grok models` overrides. */
+  const PRODUCT_DEFAULT_MODEL = "grok-4.6";
+  const PRODUCT_DEFAULT_EFFORT = "high";
+  const EFFORT_LEVELS = [
+    { value: "low", name: "Low" },
+    { value: "medium", name: "Medium" },
+    { value: "high", name: "High" },
+    { value: "xhigh", name: "xHigh" },
+  ];
+
+  function displayModelName(raw) {
+    return String(raw || "").replace(/\s*\(default\)\s*/i, "").trim();
+  }
+
+  function modelSupportsXhigh(modelId) {
+    const id = String(modelId || "").toLowerCase();
+    if (!id) return true;
+    if (/multi-agent|4\.20/.test(id)) return true;
+    const m = id.match(/grok-(\d+)\.(\d+)/);
+    if (!m) return /4\.6/.test(id);
+    const major = Number(m[1]);
+    const minor = Number(m[2]);
+    return major > 4 || (major === 4 && minor >= 6);
+  }
+
+  function effortChoicesForModel(modelId) {
+    const id = modelId || selModel?.value || PRODUCT_DEFAULT_MODEL;
+    if (modelSupportsXhigh(id)) return EFFORT_LEVELS.slice();
+    return EFFORT_LEVELS.filter((e) => e.value !== "xhigh");
+  }
 
   function fillSelect(sel, choices, current, emptyLabel, opts = {}) {
     if (!sel) return;
@@ -3071,7 +3124,10 @@
     for (const c of real) {
       const o = document.createElement("option");
       o.value = String(c.value);
-      o.textContent = c.name || String(c.value);
+      o.textContent =
+        sel === selModel
+          ? displayModelName(c.name || String(c.value))
+          : c.name || String(c.value);
       sel.appendChild(o);
     }
     if (single) {
@@ -3080,22 +3136,54 @@
     }
     if (want && [...sel.options].some((o) => o.value === want)) sel.value = want;
     else if (real.length >= 1) {
-      // Prefer default-marked or first
       const def =
-        real.find((c) => /default/i.test(String(c.name || ""))) || real[0];
+        real.find((c) => c.default) ||
+        real.find((c) => c.value === (bootstrap?.defaultModel || PRODUCT_DEFAULT_MODEL)) ||
+        real[0];
       sel.value = String(def.value);
     } else {
       sel.value = "";
     }
   }
 
+  function normalizeModelChoices(list) {
+    return (Array.isArray(list) ? list : [])
+      .map((c) => {
+        const value = String(c?.value ?? c ?? "").trim();
+        if (!value) return null;
+        return {
+          value,
+          name: displayModelName(c?.name || value),
+          default: Boolean(c?.default) || value === (bootstrap?.defaultModel || ""),
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function seedEffortOptions(preferred) {
+    if (!selEffort) return;
+    const choices = effortChoicesForModel(selModel?.value);
+    let want =
+      preferred ||
+      selEffort.value ||
+      loadLayout().effort ||
+      bootstrap?.effort ||
+      PRODUCT_DEFAULT_EFFORT;
+    if (want === "xhigh" && !choices.some((c) => c.value === "xhigh")) want = PRODUCT_DEFAULT_EFFORT;
+    fillSelect(selEffort, choices, want, "Default", { forceNoEmpty: true });
+    if (!selEffort.value) selEffort.value = PRODUCT_DEFAULT_EFFORT;
+    saveLayout({ effort: selEffort.value });
+    syncModelChip();
+  }
+
   /** Seed model dropdown from bootstrap / grok models before ACP session_config. */
   function seedModelsFromBootstrap() {
     if (!selModel) return;
-    const list =
-      (bootstrap?.models && bootstrap.models.length
+    const list = normalizeModelChoices(
+      bootstrap?.models && bootstrap.models.length
         ? bootstrap.models
-        : [{ value: PRODUCT_DEFAULT_MODEL, name: `${PRODUCT_DEFAULT_MODEL} (default)` }]);
+        : [{ value: PRODUCT_DEFAULT_MODEL, name: PRODUCT_DEFAULT_MODEL, default: true }],
+    );
     const preferred =
       bootstrap?.model ||
       loadLayout().model ||
@@ -3103,6 +3191,27 @@
       PRODUCT_DEFAULT_MODEL;
     fillSelect(selModel, list, preferred, "Model", { forceNoEmpty: true });
     saveLayout({ model: selModel.value || preferred });
+    seedEffortOptions(loadLayout().effort || bootstrap?.effort || PRODUCT_DEFAULT_EFFORT);
+    syncModelChip();
+  }
+
+  function applyModelCatalog(event) {
+    const ids = Array.isArray(event?.models) ? event.models : [];
+    if (!ids.length) return;
+    const list = normalizeModelChoices(
+      ids.map((id) => ({
+        value: String(id),
+        name: displayModelName(id),
+        default: String(id) === String(event.defaultModel || event.currentModel || ""),
+      })),
+    );
+    const preferred = event.currentModel || selModel?.value || event.defaultModel;
+    fillSelect(selModel, list, preferred, "Model", { forceNoEmpty: true });
+    if (bootstrap) {
+      bootstrap.models = list;
+      if (event.defaultModel) bootstrap.defaultModel = event.defaultModel;
+    }
+    seedEffortOptions();
     syncModelChip();
   }
 
@@ -3126,11 +3235,8 @@
         bootstrap?.defaultModel ||
         PRODUCT_DEFAULT_MODEL;
       // Merge agent options with bootstrap list (CLI is source of truth for IDs)
-      const fromAgent = modelOpt.options.map((o) => ({
-        value: String(o.value),
-        name: o.name || String(o.value),
-      }));
-      const fromBoot = (bootstrap?.models || []).filter(
+      const fromAgent = normalizeModelChoices(modelOpt.options);
+      const fromBoot = normalizeModelChoices(bootstrap?.models || []).filter(
         (m) => !fromAgent.some((a) => a.value === m.value),
       );
       fillSelect(selModel, [...fromAgent, ...fromBoot], preferred, "Model", {
@@ -3140,21 +3246,27 @@
     } else if (!realSelectOptions(selModel).length) {
       seedModelsFromBootstrap();
     }
-    if (effortOpt?.options) {
-      // Prefer agent default (often "high") over empty when no layout memory
+    if (effortOpt?.options?.length) {
+      const agentEfforts = effortOpt.options.map((o) => ({
+        value: String(o.value),
+        name: o.name || String(o.value),
+        default: Boolean(o.default),
+      }));
+      const extras = effortChoicesForModel(selModel?.value).filter(
+        (e) => !agentEfforts.some((a) => a.value === e.value),
+      );
       const preferred =
         effortOpt.currentValue ||
         layout.effort ||
         selEffort.value ||
-        (effortOpt.options.find((o) => o.default)?.value ?? "");
-      fillSelect(selEffort, effortOpt.options, preferred, "Default");
+        (agentEfforts.find((o) => o.default)?.value ?? PRODUCT_DEFAULT_EFFORT);
+      fillSelect(selEffort, [...agentEfforts, ...extras], preferred, "Default", {
+        forceNoEmpty: true,
+      });
       selEffort.dataset.configId = effortOpt.id;
-    } else if (effortOpt) {
-      selEffort.dataset.configId = effortOpt.id;
-      const preferred = effortOpt.currentValue || layout.effort;
-      if (preferred && [...selEffort.options].some((o) => o.value === String(preferred))) {
-        selEffort.value = String(preferred);
-      }
+    } else {
+      if (effortOpt) selEffort.dataset.configId = effortOpt.id;
+      seedEffortOptions(effortOpt?.currentValue || layout.effort);
     }
     applyingConfig = false;
     // Keep local preference when agent offers a different default (multi-model only)
@@ -3212,7 +3324,10 @@
     }
     const configId = sel.dataset.configId;
     if (!configId) {
-      if (sel === selModel) saveLayout({ model: sel.value || "" });
+      if (sel === selModel) {
+        saveLayout({ model: sel.value || "" });
+        seedEffortOptions(selEffort?.value);
+      }
       if (sel === selEffort) saveLayout({ effort: sel.value || "" });
       syncModelChip();
       return;
@@ -3225,7 +3340,10 @@
     }
     try {
       await api.setSessionConfig(configId, sel.value);
-      if (sel === selModel) saveLayout({ model: sel.value });
+      if (sel === selModel) {
+        saveLayout({ model: sel.value });
+        seedEffortOptions(selEffort?.value);
+      }
       if (sel === selEffort) saveLayout({ effort: sel.value });
     } catch (e) {
       addMsg("error", e.message || String(e));
@@ -3282,6 +3400,10 @@
     wireChipDropdown("btnModel", "menuModel");
     wireChipDropdown("btnEffort", "menuEffort");
     wireChipDropdown("btnMode", "menuMode");
+    wireChipDropdown("btnUsage", "menuUsage");
+    $("btnUsage")?.addEventListener("click", () => {
+      if (!$("menuUsage")?.classList.contains("hidden")) void refreshUsage();
+    });
 
     const menuPerm = $("menuPermission");
     if (menuPerm) {
@@ -4153,95 +4275,103 @@
     );
   }
 
+  function eachUsage(sel, fn) {
+    document.querySelectorAll(sel).forEach(fn);
+  }
+
   function setUsagePlanBar(pct) {
-    const bar = $("usagePlanBar");
-    const wrap = $("usagePlanBarWrap");
     const value = pct == null || !Number.isFinite(Number(pct)) ? 0 : Math.min(100, Math.max(0, Number(pct)));
-    if (bar) {
+    eachUsage(".js-usage-plan-bar", (bar) => {
       bar.style.width = `${value}%`;
       bar.classList.remove("warn", "crit");
       if (pct != null && Number.isFinite(Number(pct))) {
         if (value >= 90) bar.classList.add("crit");
         else if (value >= 70) bar.classList.add("warn");
       }
-    }
-    if (wrap) {
+    });
+    eachUsage(".js-usage-plan-bar-wrap", (wrap) => {
       wrap.setAttribute("aria-valuenow", String(Math.round(value)));
       if (pct == null || !Number.isFinite(Number(pct))) wrap.removeAttribute("aria-valuetext");
       else wrap.setAttribute("aria-valuetext", `${Math.round(value)}%`);
-    }
+    });
   }
 
   function renderUsage(data) {
-    const meta = $("usageMeta");
-    const sessionRows = $("usageSessionRows");
-    const sessionEmpty = $("usageSessionEmpty");
-    const planRows = $("usagePlanRows");
-    const planPctEl = $("usagePlanPct");
-    const planTitle = $("usagePlanTitle");
-
     if (data?.manageUrl) lastUsageManageUrl = data.manageUrl;
 
     if (!data || (!data.ok && !data.session && !data.plan)) {
-      if (sessionRows) sessionRows.innerHTML = "";
-      if (sessionEmpty) {
-        sessionEmpty.classList.remove("hidden");
-        sessionEmpty.textContent = data?.error || tt("noSessionUsage", "No model calls yet.");
-      }
-      if (planRows) planRows.innerHTML = "";
-      if (planPctEl) planPctEl.textContent = "—";
+      eachUsage(".js-usage-session-rows", (el) => {
+        el.innerHTML = "";
+      });
+      eachUsage(".js-usage-session-empty", (el) => {
+        el.classList.remove("hidden");
+        el.textContent = data?.error || tt("noSessionUsage", "No model calls yet.");
+      });
+      eachUsage(".js-usage-plan-rows", (el) => {
+        el.innerHTML = "";
+      });
+      eachUsage(".js-usage-plan-pct", (el) => {
+        el.textContent = "—";
+      });
       setUsagePlanBar(null);
-      if (meta) {
-        meta.classList.add("error");
-        meta.textContent = data?.error || "Could not load usage.";
-      }
+      eachUsage(".js-usage-meta", (el) => {
+        el.classList.add("error");
+        el.textContent = data?.error || "Could not load usage.";
+      });
       return;
     }
 
     const s = data.session;
     const hasSession = s && (s.totalTokens || s.modelCalls || s.inputTokens);
-    if (sessionEmpty) sessionEmpty.classList.toggle("hidden", Boolean(hasSession));
-    if (sessionRows) {
-      if (hasSession) {
-        const cached = s.cachedReadTokens
-          ? ` <span class="muted">(${formatInt(s.cachedReadTokens)} ${escapeHtml(tt("cached", "cached"))})</span>`
-          : "";
-        const reasoning = s.reasoningTokens
-          ? ` <span class="muted">(${formatInt(s.reasoningTokens)} ${escapeHtml(tt("reasoning", "reasoning"))})</span>`
-          : "";
-        sessionRows.innerHTML =
-          usageRow(tt("inputTokens", "Input tokens"), `${formatInt(s.inputTokens)}${cached}`) +
-          usageRow(tt("outputTokens", "Output tokens"), `${formatInt(s.outputTokens)}${reasoning}`) +
-          usageRow(tt("totalTokens", "Total tokens"), formatInt(s.totalTokens)) +
-          usageRow(
-            tt("modelCalls", "Model calls"),
-            `${formatInt(s.modelCalls)} · ${escapeHtml(tt("apiTime", "API time"))} ${formatApiDuration(s.apiDurationMs)}`,
-          ) +
-          usageRow(tt("cost", "Cost"), formatUsd(s.costUsd));
-      } else {
-        sessionRows.innerHTML = "";
-        if (sessionEmpty) {
-          sessionEmpty.textContent =
-            tt("noSessionUsage", "No model calls in this session yet.") +
-            " " +
-            tt("connectToTrack", "Connect and chat to accumulate session usage.");
-        }
-      }
+    eachUsage(".js-usage-session-empty", (el) => {
+      el.classList.toggle("hidden", Boolean(hasSession));
+    });
+    if (hasSession) {
+      const cached = s.cachedReadTokens
+        ? ` <span class="muted">(${formatInt(s.cachedReadTokens)} ${escapeHtml(tt("cached", "cached"))})</span>`
+        : "";
+      const reasoning = s.reasoningTokens
+        ? ` <span class="muted">(${formatInt(s.reasoningTokens)} ${escapeHtml(tt("reasoning", "reasoning"))})</span>`
+        : "";
+      const html =
+        usageRow(tt("inputTokens", "Input tokens"), `${formatInt(s.inputTokens)}${cached}`) +
+        usageRow(tt("outputTokens", "Output tokens"), `${formatInt(s.outputTokens)}${reasoning}`) +
+        usageRow(tt("totalTokens", "Total tokens"), formatInt(s.totalTokens)) +
+        usageRow(
+          tt("modelCalls", "Model calls"),
+          `${formatInt(s.modelCalls)} · ${escapeHtml(tt("apiTime", "API time"))} ${formatApiDuration(s.apiDurationMs)}`,
+        ) +
+        usageRow(tt("cost", "Cost"), formatUsd(s.costUsd));
+      eachUsage(".js-usage-session-rows", (el) => {
+        el.innerHTML = html;
+      });
+    } else {
+      eachUsage(".js-usage-session-rows", (el) => {
+        el.innerHTML = "";
+      });
+      eachUsage(".js-usage-session-empty", (el) => {
+        el.textContent =
+          tt("noSessionUsage", "No model calls in this session yet.") +
+          " " +
+          tt("connectToTrack", "Connect and chat to accumulate session usage.");
+      });
     }
 
     const plan = data.plan || data.billing || {};
     const pct = plan.creditUsagePercent != null ? Number(plan.creditUsagePercent) : null;
     const limitLabel = plan.limitLabel || tt("planLimit", "Plan limit");
-    if (planTitle) planTitle.textContent = limitLabel;
-    if (planPctEl) {
+    eachUsage(".js-usage-plan-title", (el) => {
+      el.textContent = limitLabel;
+    });
+    eachUsage(".js-usage-plan-pct", (el) => {
       if (pct != null) {
         const pctText =
           Math.abs(pct - Math.round(pct)) < 0.05 ? String(Math.round(pct)) : String(pct);
-        planPctEl.textContent = `${pctText}%`;
-      } else planPctEl.textContent = "—";
-    }
+        el.textContent = `${pctText}%`;
+      } else el.textContent = "—";
+    });
     setUsagePlanBar(pct);
-    if (planRows) {
+    {
       const rows = [];
       // SuperGrok weekly: show % used (matches CLI /usage "Weekly limit: N%")
       if (pct != null) {
@@ -4297,27 +4427,31 @@
       if (!rows.length && data.error) {
         rows.push(usageRow(tt("planLimit", "Plan limit"), escapeHtml(data.error)));
       }
-      planRows.innerHTML = rows.join("");
+      const planHtml = rows.join("");
+      eachUsage(".js-usage-plan-rows", (el) => {
+        el.innerHTML = planHtml;
+      });
     }
 
     const parts = [];
     if (data.session?.sessionId) parts.push(`Session ${String(data.session.sessionId).slice(0, 8)}…`);
     if (data.account?.email) parts.push(data.account.email);
     if (data.fetchedAt) parts.push(new Date(data.fetchedAt).toLocaleTimeString());
-    if (meta) {
-      meta.classList.toggle("error", Boolean(data.error && !data.plan));
-      meta.textContent = data.error && !data.plan ? data.error : parts.join(" · ");
-    }
+    const metaText = data.error && !data.plan ? data.error : parts.join(" · ");
+    eachUsage(".js-usage-meta", (el) => {
+      el.classList.toggle("error", Boolean(data.error && !data.plan));
+      el.textContent = metaText;
+    });
   }
 
   async function refreshUsage() {
-    const meta = $("usageMeta");
-    const btn = $("btnRefreshUsage");
-    if (meta) {
-      meta.classList.remove("error");
-      meta.textContent = tt("loading", "Loading…");
-    }
-    if (btn) btn.disabled = true;
+    eachUsage(".js-usage-meta", (el) => {
+      el.classList.remove("error");
+      el.textContent = tt("loading", "Loading…");
+    });
+    document.querySelectorAll(".js-refresh-usage, #btnRefreshUsage").forEach((btn) => {
+      btn.disabled = true;
+    });
     try {
       if (!api.getUsage) {
         renderUsage({ ok: false, error: "Update app — getUsage IPC missing." });
@@ -4328,7 +4462,9 @@
     } catch (e) {
       renderUsage({ ok: false, error: e.message || String(e) });
     } finally {
-      if (btn) btn.disabled = false;
+      document.querySelectorAll(".js-refresh-usage, #btnRefreshUsage").forEach((b) => {
+        b.disabled = false;
+      });
     }
   }
 
@@ -4537,6 +4673,165 @@
     });
   }
 
+  function mergeLiveModels(info, { notifyNew = false } = {}) {
+    if (!info?.models?.length) return [];
+    const prev = new Set((bootstrap?.models || []).map((m) => m.value));
+    const list = normalizeModelChoices(info.models);
+    const added = list.filter((m) => !prev.has(m.value)).map((m) => m.value);
+    bootstrap = {
+      ...bootstrap,
+      models: list,
+      defaultModel: info.defaultModel || bootstrap?.defaultModel,
+    };
+    const keep = selModel?.value || info.defaultModel;
+    fillSelect(selModel, list, keep, "Model", { forceNoEmpty: true });
+    seedEffortOptions(selEffort?.value);
+    syncModelChip();
+    if (notifyNew && added.length && prev.size) {
+      paintCliBanner({
+        kind: "models",
+        message: tt("newModelsAdded", "New models: {models}").replace("{models}", added.join(", ")),
+      });
+    }
+    return added;
+  }
+
+  function paintCliBanner(opts) {
+    const banner = $("cliUpdateBanner");
+    if (!banner) return;
+    const kind = opts?.kind || "cli";
+    const message = opts?.message || "";
+    if (!message) {
+      banner.classList.add("hidden");
+      banner.innerHTML = "";
+      return;
+    }
+    banner.classList.remove("hidden");
+    const showUpdate = kind === "cli" && opts.updateAvailable !== false;
+    banner.innerHTML =
+      `<span class="cli-update-msg">${escapeHtml(message)}</span>` +
+      (showUpdate
+        ? `<button type="button" class="pill-btn accent" id="btnBannerUpdateCli">${escapeHtml(tt("updateCli", "Update Grok CLI"))}</button>`
+        : `<button type="button" class="tab-x" id="btnBannerDismissCli" aria-label="Close">×</button>`);
+    $("btnBannerUpdateCli")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      void applyCliUpdate();
+    });
+    $("btnBannerDismissCli")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      banner.classList.add("hidden");
+    });
+  }
+
+  function applyCliStatusToSettings(status) {
+    const hint = $("cliVersionHint");
+    const updateHint = $("cliUpdateHint");
+    const btn = $("btnUpdateCli");
+    if (hint) {
+      const ver = status?.currentVersion || bootstrap?.cliVersion || "";
+      hint.textContent = ver
+        ? `${tt("cliVersion", "Grok CLI")} ${ver}` +
+          (status?.latestVersion && status.latestVersion !== ver
+            ? ` · ${tt("cliLatest", "latest")} ${status.latestVersion}`
+            : "")
+        : tt("grokCliHint", "Resolved from PATH, ~/.grok/bin, or GROK_EXECUTABLE.");
+    }
+    if (btn) btn.classList.toggle("hidden", !status?.updateAvailable);
+    if (updateHint) {
+      if (status?.updateAvailable) {
+        updateHint.textContent = tt("cliUpdateAvailable", "Grok CLI {latest} is available (you have {current})")
+          .replace("{latest}", status.latestVersion || "")
+          .replace("{current}", status.currentVersion || "");
+      } else if (status?.currentVersion) {
+        updateHint.textContent = tt("cliUpToDate", "Grok CLI is up to date ({version})").replace(
+          "{version}",
+          status.currentVersion,
+        );
+      } else {
+        updateHint.textContent = "";
+      }
+    }
+  }
+
+  async function checkCliUpdates(opts = {}) {
+    const quiet = Boolean(opts.quiet);
+    if (!api.cliStatus) return null;
+    try {
+      const status = await api.cliStatus();
+      if (status?.currentVersion && bootstrap) bootstrap.cliVersion = status.currentVersion;
+      mergeLiveModels(status, { notifyNew: !quiet });
+      applyCliStatusToSettings(status);
+      if (status?.updateAvailable) {
+        paintCliBanner({
+          kind: "cli",
+          updateAvailable: true,
+          message: tt("cliUpdateAvailable", "Grok CLI {latest} is available (you have {current})")
+            .replace("{latest}", status.latestVersion || "")
+            .replace("{current}", status.currentVersion || ""),
+        });
+      } else if (!quiet) {
+        paintCliBanner({
+          kind: "info",
+          updateAvailable: false,
+          message: tt("cliUpToDate", "Grok CLI is up to date ({version})").replace(
+            "{version}",
+            status?.currentVersion || "—",
+          ),
+        });
+      }
+      return status;
+    } catch (e) {
+      if (!quiet) {
+        paintCliBanner({
+          kind: "info",
+          updateAvailable: false,
+          message: e?.message || String(e),
+        });
+      }
+      return null;
+    }
+  }
+
+  async function applyCliUpdate() {
+    if (!api.updateCli) return;
+    paintCliBanner({
+      kind: "info",
+      updateAvailable: false,
+      message: tt("cliUpdating", "Updating Grok CLI…"),
+    });
+    const btn = $("btnUpdateCli");
+    if (btn) btn.disabled = true;
+    try {
+      const res = await api.updateCli();
+      if (bootstrap) bootstrap.cliVersion = res?.version || bootstrap.cliVersion;
+      mergeLiveModels(res, { notifyNew: true });
+      applyCliStatusToSettings({
+        currentVersion: res?.version,
+        latestVersion: res?.version,
+        updateAvailable: false,
+      });
+      paintCliBanner({
+        kind: "info",
+        updateAvailable: false,
+        message: res?.ok
+          ? tt("cliUpdated", "Grok CLI updated to {version}").replace("{version}", res.version || "")
+          : [res?.stderr, res?.stdout].filter(Boolean).join("\n").slice(0, 240) ||
+            tt("cliUpdateFailed", "Grok CLI update failed"),
+      });
+      if (agentConnected) {
+        addStep(tt("cliUpdatedReconnect", "CLI updated. Reconnect the agent to use the new version."));
+      }
+    } catch (e) {
+      paintCliBanner({
+        kind: "info",
+        updateAvailable: false,
+        message: e?.message || String(e),
+      });
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
   async function checkUpdates(opts = {}) {
     // P2: empty URL → main tries local dist/latest.json
     const url = $("inpUpdateUrl")?.value?.trim() || bootstrap?.updateUrl || "";
@@ -4664,6 +4959,7 @@
         }
         if (event.state === "disconnected") {
           agentConnected = false;
+          agentWorkspace = null;
           void refreshAgentSlots();
           if (activityId != null && turnPhase !== "done") {
             endTurnActivity({ error: true });
@@ -4816,8 +5112,13 @@
           scrollEnd(true);
         });
         void drainQueue();
+        void refreshHistory();
+        setTimeout(() => void refreshHistory(), 1600);
         break;
       }
+      case "model_catalog":
+        applyModelCatalog(event);
+        break;
       case "session":
         activeSessionId = event.sessionId || activeSessionId;
         sessionTabs?.updateActive?.({
@@ -4825,7 +5126,7 @@
           title: event.resumed
             ? convTitle.textContent || "Resumed"
             : sessionTabs.getActive()?.title || "Chat",
-          cwd: effectiveWorkspace() || null,
+          cwd: workspaceRoot || effectiveWorkspace() || null,
         });
         if (event.resumed) {
           if (
@@ -4911,9 +5212,13 @@
       setStatus("starting", tt("connecting", "Connecting…"));
       const res = await api.connect(ws || "", { ...connectOpts(), ...(extraOpts || {}) });
       agentConnected = true;
-      if (res?.isRecents) {
-        // Ensure UI stays on No project
+      agentWorkspace = res?.workspace || ws || null;
+      const askedRecents = !ws || isRecentsPath(ws);
+      if (res?.isRecents && askedRecents) {
+        // Only clear the UI project when we intentionally connected to Recents
         if (workspaceRoot) setWorkspace(null);
+      } else if (res?.workspace && !isRecentsPath(res.workspace) && !samePath(res.workspace, workspaceRoot)) {
+        setWorkspace(res.workspace);
       }
       // Warm reuse: status chip only — no noisy chat step
       if (res?.reused) {
@@ -4933,6 +5238,7 @@
       return { ok: true, reused: Boolean(res?.reused), isRecents: Boolean(res?.isRecents) };
     } catch (e) {
       agentConnected = false;
+      agentWorkspace = null;
       setStatus("error", e.message || String(e));
       addMsg("error", e.message || String(e));
       unlockChatInput();
@@ -5029,9 +5335,14 @@
       return;
     }
 
-    // Connect on first send: open project cwd, or Recents when No project
-    if (!agentConnected) {
-      const c = await connect(effectiveWorkspace());
+    // Connect (or reconnect) so the agent cwd matches the composer project
+    const wantCwd = effectiveWorkspace();
+    const cwdMismatch =
+      Boolean(agentWorkspace) &&
+      !samePath(agentWorkspace, wantCwd) &&
+      !(isRecentsPath(agentWorkspace) && isRecentsPath(wantCwd));
+    if (!agentConnected || cwdMismatch) {
+      const c = await connect(wantCwd, cwdMismatch ? { forceRestart: true } : undefined);
       if (!c?.ok) return;
     }
 
@@ -5960,11 +6271,18 @@
             : "Imagine video: not signed in",
       );
     });
-  $("btnRefreshUsage") && ($("btnRefreshUsage").onclick = () => void refreshUsage());
-  $("btnManageBilling") &&
-    ($("btnManageBilling").onclick = () => {
+  document.querySelectorAll(".js-refresh-usage, #btnRefreshUsage").forEach((btn) => {
+    btn.addEventListener("click", () => void refreshUsage());
+  });
+  document.querySelectorAll(".js-manage-billing, #btnManageBilling").forEach((btn) => {
+    btn.addEventListener("click", () => {
       void api.openExternal?.(lastUsageManageUrl || "https://grok.com?_s=usage");
     });
+  });
+  $("btnCheckCliUpdate") && ($("btnCheckCliUpdate").onclick = () => void checkCliUpdates());
+  $("btnCheckCliUpdateAccount") &&
+    ($("btnCheckCliUpdateAccount").onclick = () => void checkCliUpdates());
+  $("btnUpdateCli") && ($("btnUpdateCli").onclick = () => void applyCliUpdate());
   $("settingsNav")?.addEventListener("click", (e) => {
     const btn = e.target.closest?.("[data-settings-tab]");
     if (!btn) return;
@@ -6730,27 +7048,17 @@
     }
     // Seed models from `grok models` (bootstrap) — never leave "System default"
     seedModelsFromBootstrap();
-    if (L.effort && selEffort && [...selEffort.options].some((o) => o.value === L.effort)) {
-      selEffort.value = L.effort;
-    }
     syncPermissionChip();
     syncModelChip();
     renderProjects();
     void refreshHistory();
-    // Refresh model list in background (CLI may return more after auth warm)
+    // Refresh model list + detect CLI/model updates in background
     void api.listModels?.().then((info) => {
-      if (!info?.models?.length) return;
-      bootstrap = {
-        ...bootstrap,
-        models: info.models,
-        defaultModel: info.defaultModel || bootstrap.defaultModel,
-      };
-      const keep = selModel?.value || info.defaultModel;
-      fillSelect(selModel, info.models, keep, "Model", { forceNoEmpty: true });
-      syncModelChip();
+      mergeLiveModels(info, { notifyNew: true });
     });
     // Quiet probe on launch (banner only if a newer version is available)
     void checkUpdates({ quiet: true });
+    void checkCliUpdates({ quiet: true });
     if (bootstrap.autoConnect !== false && bootstrap.workspaceRoot) {
       void connect(bootstrap.workspaceRoot);
     }

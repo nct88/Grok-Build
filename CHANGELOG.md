@@ -2,6 +2,16 @@
 
 Public, versioned changes for Grok Build Desktop.
 
+## 0.5.33 — 2026-08-13
+
+- Kept the composer project and left sidebar on the same open folder after sending a message, and refreshed project chat history when a turn completes.
+- Added automatic Grok CLI version and model detection, with an in-app prompt that runs `grok update`.
+- Moved Usage next to Effort in the composer while keeping the Settings usage panel.
+- Set Effort to `low` / `medium` / `high` / `xhigh` with `high` as the default and `xhigh` for grok-4.6+, and removed `(default)` from the model chip.
+- Moved the project folder picker to the top-left of the chat frame.
+
+Release details are maintained in `docs/releases/0.5.33.md`.
+
 ## 0.5.32 — 2026-08-12
 
 - Added direct drag-and-drop of an individual chat from one project to another.

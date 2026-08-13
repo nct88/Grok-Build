@@ -482,18 +482,22 @@ function grokHomeDir() {
   return process.env.GROK_HOME || path.join(os.homedir(), ".grok");
 }
 
-/** Fallback when `grok models` unavailable — keep in sync with CLI default. */
+/** Fallback when `grok models` unavailable — IDs only; live CLI is source of truth. */
 const FALLBACK_MODELS = {
-  defaultModel: "grok-4.5",
-  models: [{ value: "grok-4.5", name: "grok-4.5 (default)" }],
+  defaultModel: "grok-4.6",
+  models: [
+    { value: "grok-4.6", name: "grok-4.6" },
+    { value: "grok-4.5", name: "grok-4.5" },
+  ],
 };
 
 /**
- * Parse `grok models` stdout → { defaultModel, models: [{value,name}] }.
+ * Parse `grok models` stdout → { defaultModel, models: [{value,name,default}] }.
  * Example:
- *   Default model: grok-4.5
+ *   Default model: grok-4.6
  *   Available models:
- *     * grok-4.5 (default)
+ *     * grok-4.6 (default)
+ *     - grok-4.5
  */
 function parseGrokModelsOutput(stdout) {
   const text = String(stdout || "");
@@ -516,21 +520,58 @@ function parseGrokModelsOutput(stdout) {
     const isDefault = /\(default\)/i.test(line) || id === defaultModel;
     models.push({
       value: id,
-      name: isDefault ? `${id} (default)` : id,
+      name: id,
+      default: isDefault,
     });
   }
   if (!models.length) {
     models.push({
       value: defaultModel,
-      name: `${defaultModel} (default)`,
+      name: defaultModel,
+      default: true,
     });
   } else if (!seen.has(defaultModel)) {
     models.unshift({
       value: defaultModel,
-      name: `${defaultModel} (default)`,
+      name: defaultModel,
+      default: true,
     });
   }
   return { defaultModel, models };
+}
+
+function parseGrokVersionOutput(text) {
+  const m = String(text || "").match(/\bgrok\s+v?(\d+\.\d+\.\d+[^\s]*)/i);
+  return m ? m[1] : "";
+}
+
+function getGrokCliVersion() {
+  try {
+    const out = execFileSync(resolveGrokExecutable(), ["--version"], {
+      encoding: "utf8",
+      timeout: 15_000,
+      env: { ...process.env, ...grokEnv() },
+      windowsHide: true,
+      maxBuffer: 64 * 1024,
+    });
+    return parseGrokVersionOutput(out);
+  } catch (e) {
+    return parseGrokVersionOutput(
+      (e && (e.stdout || e.stderr || e.message)) || "",
+    );
+  }
+}
+
+function parseCliUpdateCheck(stdout, stderr) {
+  const text = `${stdout || ""}\n${stderr || ""}`;
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return null;
+  }
 }
 
 /** Live model list from CLI (cached briefly). */
@@ -1627,6 +1668,7 @@ app.whenReady().then(() => {
       product: "Grok Build",
       version: app.getVersion() || "0.5.0",
       executable: resolveGrokExecutable(),
+      cliVersion: getGrokCliVersion(),
       workspaceRoot,
       permissionMode: normalizePermissionMode(state.permissionMode),
       model,
@@ -2015,6 +2057,50 @@ app.whenReady().then(() => {
 
   /** Phase D2/D4 — control plane + telemetry */
   ipcMain.handle("app:listModels", async () => listAvailableModels(true));
+  ipcMain.handle("app:cliStatus", async () => {
+    const currentVersion = getGrokCliVersion();
+    const models = listAvailableModels(true);
+    let check = null;
+    try {
+      const r = await runGrokCliArgs(["update", "--check", "--json"], {
+        timeoutMs: 30_000,
+      });
+      check = parseCliUpdateCheck(r.stdout, r.stderr);
+    } catch {
+      check = null;
+    }
+    const latestVersion = String(check?.latestVersion || currentVersion || "").trim();
+    const current = String(check?.currentVersion || currentVersion || "").trim();
+    return {
+      ok: true,
+      executable: resolveGrokExecutable(),
+      currentVersion: current,
+      latestVersion,
+      updateAvailable: Boolean(check?.updateAvailable),
+      channel: check?.channel || "stable",
+      defaultModel: models.defaultModel,
+      models: models.models,
+      error: check?.error || null,
+    };
+  });
+  ipcMain.handle("app:updateCli", async () => {
+    const before = getGrokCliVersion();
+    const r = await runGrokCliArgs(["update"], { timeoutMs: 5 * 60_000 });
+    modelsCache = null;
+    modelsCacheAt = 0;
+    const models = listAvailableModels(true);
+    const version = getGrokCliVersion() || before;
+    return {
+      ok: r.code === 0 || r.code == null,
+      code: r.code,
+      stdout: r.stdout,
+      stderr: r.stderr,
+      version,
+      previousVersion: before,
+      defaultModel: models.defaultModel,
+      models: models.models,
+    };
+  });
   ipcMain.handle("app:health", async () => ensureControlPlane().health());
   ipcMain.handle("app:controlPlane", async () => ensureControlPlane().snapshot());
   ipcMain.handle("telemetry:getSummary", async () => ensureTelemetry().summary());

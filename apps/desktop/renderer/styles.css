@@ -741,6 +741,41 @@ body.resizing button { user-select: auto !important; cursor: inherit; }
   padding: 8px 16px 4px; border-bottom: 0; min-height: 44px;
   flex: 0 0 auto;
 }
+.conv-header-left {
+  display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;
+}
+.conv-header-left .chip-project {
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  background: var(--chip-bg);
+}
+.conv-header-left .chip-project .chip-label { max-width: 148px; }
+.chip-dd-header .chip-menu {
+  top: calc(100% + 6px);
+  bottom: auto;
+  left: 0;
+}
+.cli-update-banner {
+  flex: 0 0 auto;
+  margin: 0 16px 6px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.4;
+  background: color-mix(in srgb, var(--accent, #6ea8fe) 14%, var(--bg-elev));
+  border: 1px solid var(--line);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cli-update-banner.hidden { display: none !important; }
+.cli-update-banner .cli-update-msg { min-width: 0; flex: 1; }
+.cli-update-banner button {
+  flex-shrink: 0;
+}
 .conv-title-wrap { min-width: 0; overflow: hidden; }
 .conv-title { margin: 0; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conv-sub { margin: 2px 0 0; font-size: 11px; color: var(--text-3); max-width: 36vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1706,6 +1741,20 @@ body.resizing button { user-select: auto !important; cursor: inherit; }
 .chip-menu-wide { min-width: 220px; }
 #menuModel { min-width: 200px; max-width: min(320px, 90vw); }
 #menuEffort { min-width: 140px; }
+#menuUsage {
+  min-width: 320px;
+  max-width: min(400px, 92vw);
+  max-height: min(480px, 70vh);
+  padding: 10px;
+}
+.chip-menu-usage .usage-stack { gap: 10px; }
+.chip-menu-usage .usage-card { padding: 10px 12px; }
+.usage-pop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
 .chip-menu-section {
   padding: 6px 10px 4px; font-size: 10px; font-weight: 600;
   color: var(--text-3); text-transform: uppercase; letter-spacing: .04em;

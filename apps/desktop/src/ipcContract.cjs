@@ -24,6 +24,8 @@ const INVOKE_CHANNELS = [
   "app:openIde",
   "app:getIdeStatus",
   "app:listModels",
+  "app:cliStatus",
+  "app:updateCli",
   "app:health",
   "app:controlPlane",
   "agent:connect",

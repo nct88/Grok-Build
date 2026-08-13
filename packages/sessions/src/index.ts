@@ -28,7 +28,7 @@ interface SummaryJson {
 }
 
 function normalizePath(value: string): string {
-  return value.replaceAll("/", "\\").toLowerCase();
+  return value.replaceAll("/", "\\").replace(/\\+$/, "").toLowerCase();
 }
 
 function collapseWhitespace(value: string): string {
