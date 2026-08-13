@@ -35,25 +35,10 @@
     function render() {
       root.innerHTML = "";
       root.classList.add("session-tabs");
-      // Single empty "Chat" tab is redundant with the conversation title —
-      // hide the whole rail until there are 2+ tabs (New chat still via sidebar / + once visible).
+      // One conversation lives under the sidebar project. Hide the rail until
+      // the user explicitly keeps two chats open at once.
       if (tabs.length <= 1) {
         root.classList.add("session-tabs-empty");
-        // Keep a compact "+" so multi-session is still one click away
-        const rail = document.createElement("div");
-        rail.className = "session-tabs-rail session-tabs-rail-solo";
-        const add = document.createElement("button");
-        add.type = "button";
-        add.className = "session-tab-add";
-        add.title = "New chat tab";
-        add.setAttribute("aria-label", "New chat tab");
-        add.textContent = "+";
-        add.onclick = () => {
-          if (opts.onNew) opts.onNew();
-          else addTab({});
-        };
-        rail.appendChild(add);
-        root.appendChild(rail);
         return;
       }
       root.classList.remove("session-tabs-empty");
@@ -188,6 +173,26 @@
       }
     }
 
+    function resetToOne(partial) {
+      const t = makeTab(partial);
+      tabs = [t];
+      activeId = t.id;
+      render();
+      return t;
+    }
+
+    function pruneToActive() {
+      const cur = getActive();
+      if (!cur) {
+        ensureOne();
+        return getActive();
+      }
+      tabs = [cur];
+      activeId = cur.id;
+      render();
+      return cur;
+    }
+
     ensureOne();
 
     return {
@@ -199,6 +204,8 @@
       },
       getActive,
       addTab,
+      resetToOne,
+      pruneToActive,
       closeTab,
       activate,
       updateActive,

@@ -39,6 +39,8 @@
   const composerEl = document.querySelector(".composer");
 
   let workspaceRoot = null;
+  /** Extra source folders attached to the current project (multi-root chat). */
+  let extraRoots = [];
   /** Last cwd the agent process actually connected to */
   let agentWorkspace = null;
   /** Agent cwd for "No project" chats — from bootstrap.recentsWorkspace */
@@ -751,33 +753,62 @@
     },
   });
 
+  function conversationHeading() {
+    const tab = sessionTabs?.getActive?.();
+    const raw = String(tab?.title || convTitle?.textContent || "").trim();
+    const generic = new Set([
+      "",
+      "Chat",
+      "New chat",
+      "New conversation",
+      "Conversation",
+      tt("newConversation", "New conversation"),
+      tt("conversation", "Conversation"),
+    ]);
+    if (raw && !generic.has(raw)) return raw;
+    if (workspaceRoot) return basen(workspaceRoot);
+    return tt("conversation", "Conversation");
+  }
+
+  function syncConvTitle(explicit) {
+    if (!convTitle) return;
+    convTitle.textContent = explicit || conversationHeading();
+  }
+
   async function newChatTab(viaAgent) {
     sessionTabs.saveSnapshot(eventStore.items);
-    const tab = sessionTabs.addTab(
-      { title: "New chat", cwd: effectiveWorkspace() || null },
-      true,
-    );
     restoreStoreItems([]);
     showEmpty();
+    const title = conversationHeading();
+    sessionTabs.resetToOne?.({
+      title,
+      sessionId: null,
+      cwd: effectiveWorkspace() || null,
+      items: [],
+      skipPrevSnapshot: true,
+    });
+    syncConvTitle(title);
     if (viaAgent) {
       try {
         const res = await api.newSession();
         activeSessionId = res?.sessionId || null;
         sessionTabs.updateActive({
           sessionId: activeSessionId,
-          title: "New chat",
+          title,
           cwd: effectiveWorkspace() || null,
         });
       } catch (e) {
         addMsg("error", e.message || String(e));
       }
+    } else {
+      activeSessionId = null;
     }
     editCount = 0;
     reviews = [];
     renderReviewList();
     planDock.classList.add("hidden");
     unlockChatInput();
-    return tab;
+    return sessionTabs.getActive?.();
   }
 
   async function resolvePermissionInline(requestId, optionId) {
@@ -1183,12 +1214,16 @@
 
   function updateProjectChip() {
     const label = $("projectChipLabel");
+    const extraCount = extraRoots.filter((p) => p && !samePath(p, workspaceRoot)).length;
     if (label) {
-      // Codex composer: "Choose project" when none selected
-      label.textContent = workspaceRoot
-        ? basen(workspaceRoot)
-        : tt("chooseProject", "Choose project");
-      label.title = workspaceRoot || tt("recentsHint", "Chats without a project go to Recents");
+      if (!workspaceRoot) {
+        label.textContent = tt("chooseProject", "Choose project");
+        label.title = tt("recentsHint", "Chats without a project go to Recents");
+      } else {
+        const name = basen(workspaceRoot);
+        label.textContent = extraCount ? `${name} +${extraCount}` : name;
+        label.title = [workspaceRoot, ...extraRoots].filter(Boolean).join("\n");
+      }
     }
     const btn = $("btnProject");
     if (btn) {
@@ -1200,6 +1235,7 @@
   function setWorkspace(root) {
     const prev = workspaceRoot;
     workspaceRoot = root || null;
+    if (!root) extraRoots = [];
     workspaceLabel.textContent = root || tt("noProject", "No project");
     if ($("inpWorkspace")) $("inpWorkspace").value = root || "";
     if (filesRoot) filesRoot.textContent = root || "—";
@@ -1251,7 +1287,8 @@
     const next = root ? String(root).trim() : null;
     const reconnect = opts.reconnect !== false;
     const freshChat = opts.freshChat !== false;
-    if (samePath(next, workspaceRoot)) {
+    const extrasIn = Array.isArray(opts.extraRoots) ? opts.extraRoots : undefined;
+    if (samePath(next, workspaceRoot) && extrasIn === undefined) {
       bindActiveTabWorkspace(next);
       renderProjects();
       renderProjectMenu();
@@ -1260,11 +1297,12 @@
     }
     try {
       if (api.setWorkspace) {
-        const res = await api.setWorkspace(next);
+        const res = await api.setWorkspace(next, extrasIn);
         if (res?.recentsWorkspace) recentsWorkspace = res.recentsWorkspace;
         if (res?.recentProjects && bootstrap) {
           bootstrap.recentProjects = res.recentProjects;
         }
+        extraRoots = Array.isArray(res?.extraRoots) ? res.extraRoots : extrasIn || [];
       }
     } catch (e) {
       addMsg("error", e?.message || String(e));
@@ -1280,13 +1318,8 @@
         }
       }
     }
-    const active = sessionTabs?.getActive?.();
-    const activeCwd = active?.cwd || "";
-    const switchingProjects =
-      Boolean(next) && !isRecentsPath(activeCwd) && !samePath(activeCwd, next);
-    const openFresh = freshChat && (switchingProjects || !currentChatIsEmpty());
-    if (openFresh) {
-      sessionTabs?.saveSnapshot?.(eventStore.items);
+    const startFresh = freshChat && !currentChatIsEmpty();
+    if (startFresh) {
       resetTimeline();
       activeSessionId = null;
       editCount = 0;
@@ -1294,20 +1327,19 @@
       renderReviewList();
       planDock.classList.add("hidden");
       showEmpty();
-      convTitle.textContent = tt("newConversation", "New conversation");
-      sessionTabs?.addTab?.(
-        {
-          title: tt("newConversation", "New conversation"),
-          sessionId: null,
-          cwd: effectiveWorkspace(next) || null,
-          items: [],
-          skipPrevSnapshot: true,
-        },
-        true,
-      );
-    } else {
-      bindActiveTabWorkspace(next);
+    } else if (currentChatIsEmpty()) {
+      eventStore.removeKind("empty");
+      showEmpty();
     }
+    const heading = next ? basen(next) : tt("conversation", "Conversation");
+    sessionTabs?.resetToOne?.({
+      title: heading,
+      sessionId: startFresh ? null : sessionTabs?.getActive?.()?.sessionId || null,
+      cwd: effectiveWorkspace(next) || null,
+      items: startFresh ? [] : sessionTabs?.snapshotItems?.(eventStore.items) || [],
+      skipPrevSnapshot: true,
+    });
+    syncConvTitle(heading);
     void refreshHistory();
     if (reconnect && (agentConnected || busy)) {
       await connect(effectiveWorkspace(next), { forceRestart: true });
@@ -3786,7 +3818,8 @@
       b.onclick = () => {
         menu.classList.add("hidden");
         $("btnProject")?.setAttribute("aria-expanded", "false");
-        if (value === "__open__") void pickFolderAndSelect();
+        if (value === "__open__") openProjectModal("open");
+        else if (value === "__add__") openProjectModal("add");
         else void selectProject(value || null);
       };
       menu.appendChild(b);
@@ -3795,7 +3828,91 @@
     for (const p of projectListItems()) {
       addOpt(basen(p), p, samePath(p, workspaceRoot));
     }
+    addOpt(tt("addFolder", "Add folder"), "__add__", false);
     addOpt(tt("openProject", "Open project…"), "__open__", false);
+  }
+
+  let draftProjectFolders = [];
+  let projectModalMode = "open";
+
+  function extraRootsHint() {
+    const extras = extraRoots.filter((p) => p && !samePath(p, workspaceRoot));
+    if (!extras.length) return "";
+    return (
+      "Additional project folders you may read and edit in this session:\n" +
+      extras.map((p) => `- ${p}`).join("\n")
+    );
+  }
+
+  function renderProjectFolderDraft() {
+    const host = $("projectFolderList");
+    if (!host) return;
+    host.innerHTML = "";
+    draftProjectFolders.forEach((folder, index) => {
+      const row = document.createElement("div");
+      row.className = "project-folder-row";
+      row.innerHTML = `<span class="project-folder-name" title="${escapeHtml(folder)}">${escapeHtml(basen(folder))}</span>`;
+      const rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "tab-x";
+      rm.textContent = "×";
+      rm.title = tt("remove", "Remove");
+      rm.onclick = () => {
+        draftProjectFolders.splice(index, 1);
+        renderProjectFolderDraft();
+      };
+      row.appendChild(rm);
+      host.appendChild(row);
+    });
+    if ($("inpProjectName") && !$("inpProjectName").value.trim() && draftProjectFolders[0]) {
+      $("inpProjectName").placeholder = basen(draftProjectFolders[0]);
+    }
+  }
+
+  function closeProjectModal() {
+    $("projectModal")?.classList.add("hidden");
+  }
+
+  function openProjectModal(mode, seed) {
+    projectModalMode = mode === "add" ? "add" : "open";
+    draftProjectFolders = [];
+    if (projectModalMode === "add" && workspaceRoot) {
+      draftProjectFolders = [workspaceRoot, ...extraRoots.filter((p) => !samePath(p, workspaceRoot))];
+    } else if (Array.isArray(seed)) {
+      draftProjectFolders = seed.slice();
+    }
+    const title = $("projectModalTitle");
+    if (title) {
+      title.textContent =
+        projectModalMode === "add"
+          ? tt("addFolderTitle", "Add folders")
+          : tt("openProjectTitle", "Open project");
+    }
+    if ($("inpProjectName")) $("inpProjectName").value = workspaceRoot ? basen(workspaceRoot) : "";
+    renderProjectFolderDraft();
+    $("projectModal")?.classList.remove("hidden");
+    if (typeof GrokI18n !== "undefined") GrokI18n.applyDom();
+    globalThis.GrokIcons?.applyAll?.($("projectModal"));
+  }
+
+  async function addDraftProjectFolder() {
+    const picked = await pickFolder();
+    if (!picked) return;
+    if (!draftProjectFolders.some((p) => samePath(p, picked))) {
+      draftProjectFolders.push(picked);
+      renderProjectFolderDraft();
+    }
+  }
+
+  async function confirmProjectModal() {
+    if (!draftProjectFolders.length) {
+      addMsg("error", tt("needFolder", "Add at least one folder."));
+      return;
+    }
+    const primary = draftProjectFolders[0];
+    const extras = draftProjectFolders.slice(1);
+    closeProjectModal();
+    await selectProject(primary, { extraRoots: extras, reconnect: true, freshChat: true });
   }
 
   function looksLikeSessionIdTitle(s) {
@@ -3897,9 +4014,8 @@
   }
 
   async function pickFolderAndSelect() {
-    const root = await pickFolder();
-    if (root) await selectProject(root, { reconnect: true, freshChat: true });
-    return root;
+    openProjectModal(workspaceRoot ? "add" : "open");
+    return null;
   }
 
   /** Common tool chips for Agent settings (CLI --tools / --denied-tools). */
@@ -4073,6 +4189,7 @@
       deniedTools: $("inpDenied")?.value?.trim() || "",
       worktree: wtName,
       worktreeRef: wtRef,
+      extraRoots: extraRoots.slice(),
       rules: $("inpRules")?.value?.trim() || "",
       maxTurns: readMaxTurnsFromUi(),
       disableWebSearch: Boolean($("chkDisableWeb")?.checked),
@@ -5210,7 +5327,12 @@
         setWorkspace(ws);
       }
       setStatus("starting", tt("connecting", "Connecting…"));
-      const res = await api.connect(ws || "", { ...connectOpts(), ...(extraOpts || {}) });
+      const launch = { ...connectOpts(), ...(extraOpts || {}) };
+      const extraHint = extraRootsHint();
+      if (extraHint) {
+        launch.rules = [launch.rules, extraHint].filter(Boolean).join("\n\n");
+      }
+      const res = await api.connect(ws || "", launch);
       agentConnected = true;
       agentWorkspace = res?.workspace || ws || null;
       const askedRecents = !ws || isRecentsPath(ws);
@@ -6072,7 +6194,15 @@
   }
 
   // wire
-  $("btnWorkspace").onclick = () => void pickFolderAndSelect();
+  $("btnWorkspace").onclick = () => openProjectModal("open");
+  $("btnCloseProjectModal") && ($("btnCloseProjectModal").onclick = () => closeProjectModal());
+  $("btnCancelProjectModal") && ($("btnCancelProjectModal").onclick = () => closeProjectModal());
+  $("btnAddProjectFolder") && ($("btnAddProjectFolder").onclick = () => void addDraftProjectFolder());
+  $("btnConfirmProjectModal") &&
+    ($("btnConfirmProjectModal").onclick = () => void confirmProjectModal());
+  $("projectModal")?.addEventListener("click", (e) => {
+    if (e.target === $("projectModal")) closeProjectModal();
+  });
 
   // Composer project picker (Codex-style)
   $("btnProject")?.addEventListener("click", (e) => {
@@ -7028,8 +7158,10 @@
   (async () => {
     bootstrap = await api.getBootstrap();
     recentsWorkspace = bootstrap.recentsWorkspace || null;
+    extraRoots = Array.isArray(bootstrap.extraRoots) ? bootstrap.extraRoots : [];
     setWorkspace(bootstrap.workspaceRoot || null);
     sessionTabs?.updateActive?.({ cwd: effectiveWorkspace() || null });
+    syncConvTitle();
     updateProjectChip();
     applyAuthProfile(bootstrap.auth || { loggedIn: false });
     void refreshAuthProfile();

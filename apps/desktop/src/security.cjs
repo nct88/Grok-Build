@@ -48,7 +48,7 @@ function isCredentialPath(resolved, grokHome) {
 /**
  * @param {object} ctx
  * @param {string} filePath
- * @param {{ write?: boolean, allowOutside?: boolean, workspaceRoot?: string|null, grokHome?: string }} opts
+ * @param {{ write?: boolean, allowOutside?: boolean, workspaceRoot?: string|null, extraRoots?: string[], grokHome?: string }} opts
  */
 function assertWorkspacePath(filePath, opts = {}) {
   const resolved = normalizePath(filePath);
@@ -66,6 +66,9 @@ function assertWorkspacePath(filePath, opts = {}) {
   }
 
   const root = opts.workspaceRoot ? normalizePath(opts.workspaceRoot) : null;
+  const extraRoots = Array.isArray(opts.extraRoots)
+    ? opts.extraRoots.map((p) => normalizePath(p)).filter(Boolean)
+    : [];
   const allowOutside = Boolean(opts.allowOutside);
 
   if (!root) {
@@ -74,7 +77,8 @@ function assertWorkspacePath(filePath, opts = {}) {
   if (!fs.existsSync(root)) {
     throw new Error("Project folder is missing.");
   }
-  if (!allowOutside && !isPathInside(root, resolved)) {
+  const allowed = [root, ...extraRoots];
+  if (!allowOutside && !allowed.some((r) => isPathInside(r, resolved))) {
     throw new Error("Path outside workspace is not allowed.");
   }
   return resolved;
@@ -230,6 +234,11 @@ function assertMediaPreviewPath(filePath, opts = {}) {
   const tmp = normalizePath(require("node:os").tmpdir());
   const allowedRoots = [];
   if (opts.workspaceRoot) allowedRoots.push(normalizePath(opts.workspaceRoot));
+  if (Array.isArray(opts.extraRoots)) {
+    for (const extra of opts.extraRoots) {
+      if (extra) allowedRoots.push(normalizePath(extra));
+    }
+  }
   if (grokHome) {
     allowedRoots.push(path.join(grokHome, "sessions"));
     allowedRoots.push(path.join(grokHome, "downloads"));

@@ -6,21 +6,31 @@ import type { GrokHost } from "./types.js";
 export interface NodeFsHostOptions {
   /** Absolute workspace root; writes outside require allowOutside. */
   workspaceRoot: string;
+  extraRoots?: string[];
   allowOutside?: boolean;
   requestPermission?: GrokHost["requestPermission"];
   selectAuthMethod?: GrokHost["selectAuthMethod"];
   onFileWrite?: (change: { path: string; oldText?: string; newText: string }) => void;
 }
 
-function assertPath(filePath: string, root: string, allowOutside: boolean): string {
+function isInsideRoot(resolved: string, root: string): boolean {
+  const rel = path.relative(path.resolve(root), resolved);
+  return !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+function assertPath(
+  filePath: string,
+  root: string,
+  allowOutside: boolean,
+  extraRoots: string[] = [],
+): string {
   if (!path.isAbsolute(filePath)) {
     throw new Error(`ACP path must be absolute: ${filePath}`);
   }
   const resolved = path.resolve(filePath);
-  const rootResolved = path.resolve(root);
-  const rel = path.relative(rootResolved, resolved);
-  const outside = rel.startsWith("..") || path.isAbsolute(rel);
-  if (outside && !allowOutside) {
+  const allowed = [root, ...extraRoots.filter(Boolean)];
+  const inside = allowed.some((candidate) => isInsideRoot(resolved, candidate));
+  if (!inside && !allowOutside) {
     throw new Error(`Path outside workspace: ${resolved}`);
   }
   return resolved;
@@ -31,6 +41,7 @@ function assertPath(filePath: string, root: string, allowOutside: boolean): stri
  */
 export function createNodeFsHost(options: NodeFsHostOptions): GrokHost {
   const allowOutside = Boolean(options.allowOutside);
+  const extraRoots = Array.isArray(options.extraRoots) ? options.extraRoots : [];
 
   return {
     async requestPermission(request) {
@@ -48,7 +59,7 @@ export function createNodeFsHost(options: NodeFsHostOptions): GrokHost {
     },
 
     async readTextFile(request) {
-      const filePath = assertPath(request.path, options.workspaceRoot, allowOutside);
+      const filePath = assertPath(request.path, options.workspaceRoot, allowOutside, extraRoots);
       let content = await readFile(filePath, "utf8");
       if (request.line !== undefined && request.line !== null) {
         const lines = content.split(/\r?\n/);
@@ -60,7 +71,7 @@ export function createNodeFsHost(options: NodeFsHostOptions): GrokHost {
     },
 
     async writeTextFile(request) {
-      const filePath = assertPath(request.path, options.workspaceRoot, allowOutside);
+      const filePath = assertPath(request.path, options.workspaceRoot, allowOutside, extraRoots);
       let oldText: string | undefined;
       try {
         oldText = await readFile(filePath, "utf8");

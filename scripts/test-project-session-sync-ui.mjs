@@ -78,8 +78,16 @@ try {
   }, projectB);
   await page.locator("#btnProject").click();
   await page.locator('#menuProject [data-value="__open__"]').click();
+  await page.waitForSelector("#projectModal:not(.hidden)");
+  await page.locator("#btnAddProjectFolder").click();
+  await page.waitForFunction((name) =>
+    Array.from(document.querySelectorAll(".project-folder-name"))
+      .some((node) => node.textContent === name),
+  path.basename(projectB));
+  await page.locator("#btnConfirmProjectModal").click();
   await page.waitForFunction((selected) =>
-    document.querySelector("#workspaceLabel")?.textContent === selected,
+    document.querySelector("#workspaceLabel")?.textContent === selected &&
+    document.querySelector("#projectModal")?.classList.contains("hidden"),
   projectB);
 
   const sync = await page.evaluate((selected) => ({
@@ -87,21 +95,22 @@ try {
     chip: document.querySelector("#projectChipLabel")?.textContent || "",
     activeProject: document.querySelector(".project-item.active")?.getAttribute("title") || "",
     freshTitle: document.querySelector("#convTitle")?.textContent || "",
+    tabCount: document.querySelectorAll(".session-tab").length,
     selected,
   }), projectB);
   assert.equal(sync.workspace, projectB);
   assert.equal(sync.chip, path.basename(projectB));
   assert.equal(sync.activeProject, projectB);
-  assert.match(sync.freshTitle, /New conversation|New chat|Chat mới/);
+  assert.equal(sync.freshTitle, path.basename(projectB));
+  assert.equal(sync.tabCount, 0);
 
-  const tabButtons = page.locator(".session-tab");
-  assert.equal(await tabButtons.count(), 2);
-  await tabButtons.nth(0).click();
+  await page.locator(".project-item").filter({ hasText: path.basename(projectA) }).click();
   await page.waitForFunction(({ selected, name }) =>
     document.querySelector("#workspaceLabel")?.textContent === selected &&
-    document.querySelector(".empty-hero h2")?.textContent === name,
+    document.querySelector(".empty-hero h2")?.textContent === name &&
+    document.querySelectorAll(".session-tab").length === 0,
   { selected: projectA, name: path.basename(projectA) });
-  await page.locator(".session-tab").nth(1).click();
+  await page.locator(".project-item").filter({ hasText: path.basename(projectB) }).click();
   await page.waitForFunction(({ selected, name }) =>
     document.querySelector("#workspaceLabel")?.textContent === selected &&
     document.querySelector(".empty-hero h2")?.textContent === name,

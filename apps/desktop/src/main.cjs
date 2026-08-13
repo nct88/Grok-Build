@@ -408,6 +408,7 @@ function connectAgentHost(acp, slot, mode) {
   const sup = getSupervisor();
   const fsHost = acp.createNodeFsHost({
     workspaceRoot: slot.workspace,
+    extraRoots: sanitizeExtraRoots(slot.connectOptions.extraRoots, slot.workspace),
     allowOutside: Boolean(slot.connectOptions.allowOutside),
     requestPermission: sup.createPermissionHandler(slot, mode),
     onFileWrite(change) {
@@ -609,9 +610,45 @@ function listAvailableModels(force = false) {
 }
 
 /** Shared path policy for IPC FS / IDE file args. */
+function sanitizeExtraRoots(list, primary) {
+  const out = [];
+  const primaryN = primary ? path.resolve(primary) : "";
+  for (const raw of Array.isArray(list) ? list : []) {
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    try {
+      const resolved = path.resolve(raw.trim());
+      if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) continue;
+      if (primaryN && pathsEqual(resolved, primaryN)) continue;
+      if (out.some((p) => pathsEqual(p, resolved))) continue;
+      out.push(resolved);
+    } catch {
+      // skip
+    }
+  }
+  return out.slice(0, 8);
+}
+
+function extrasForProject(primary) {
+  if (!primary) return [];
+  const state = loadState();
+  const map = state.workspaceExtrasByProject || {};
+  const key = path.resolve(primary);
+  const found =
+    map[key] ||
+    Object.entries(map).find(([k]) => pathsEqual(k, key))?.[1] ||
+    [];
+  return sanitizeExtraRoots(found, primary);
+}
+
 function workspacePathContext() {
+  const root = getConnectedWorkspace() || loadState().workspaceRoot || null;
+  const extras =
+    getConnectOptions().extraRoots ||
+    loadState().workspaceExtraRoots ||
+    extrasForProject(root);
   return {
-    workspaceRoot: getConnectedWorkspace() || loadState().workspaceRoot || null,
+    workspaceRoot: root,
+    extraRoots: sanitizeExtraRoots(extras, root),
     allowOutside: Boolean(
       getConnectOptions().allowOutside || loadState().allowOutside,
     ),
@@ -1670,6 +1707,7 @@ app.whenReady().then(() => {
       executable: resolveGrokExecutable(),
       cliVersion: getGrokCliVersion(),
       workspaceRoot,
+      extraRoots: extrasForProject(workspaceRoot),
       permissionMode: normalizePermissionMode(state.permissionMode),
       model,
       defaultModel: modelInfo.defaultModel,
@@ -1920,13 +1958,14 @@ app.whenReady().then(() => {
   });
 
   /** Set UI project (null = No project / Recents). Does not connect agent. */
-  ipcMain.handle("app:setWorkspace", async (_e, workspaceRoot) => {
+  ipcMain.handle("app:setWorkspace", async (_e, workspaceRoot, extraRoots) => {
     const raw = typeof workspaceRoot === "string" ? workspaceRoot.trim() : "";
     if (!raw || isRecentsWorkspace(raw)) {
-      saveState({ workspaceRoot: null });
+      saveState({ workspaceRoot: null, workspaceExtraRoots: [] });
       return {
         ok: true,
         workspaceRoot: null,
+        extraRoots: [],
         isRecents: true,
         recentsWorkspace: getRecentsWorkspace(),
         recentProjects: sanitizeRecentProjects(loadState().recentProjects),
@@ -1937,11 +1976,21 @@ app.whenReady().then(() => {
     }
     const root = path.resolve(raw);
     const state = loadState();
+    const extras =
+      extraRoots === undefined ? extrasForProject(root) : sanitizeExtraRoots(extraRoots, root);
+    const extrasMap = { ...(state.workspaceExtrasByProject || {}) };
+    extrasMap[root] = extras;
     const recent = touchRecentProject(state.recentProjects, root);
-    saveState({ workspaceRoot: root, recentProjects: recent });
+    saveState({
+      workspaceRoot: root,
+      recentProjects: recent,
+      workspaceExtraRoots: extras,
+      workspaceExtrasByProject: extrasMap,
+    });
     return {
       ok: true,
       workspaceRoot: root,
+      extraRoots: extras,
       isRecents: false,
       recentsWorkspace: getRecentsWorkspace(),
       recentProjects: recent,

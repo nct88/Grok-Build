@@ -792,10 +792,7 @@ body.resizing button { user-select: auto !important; cursor: inherit; }
 }
 /* One conversation: compact bar with only "+" (no lone "Chat" tab) */
 .session-tabs.session-tabs-empty {
-  border-bottom-color: transparent;
-  min-height: 0;
-  padding-top: 2px;
-  padding-bottom: 2px;
+  display: none !important;
 }
 .session-tabs-rail {
   display: flex; align-items: flex-end; gap: 2px; overflow-x: auto;
@@ -832,6 +829,29 @@ body.resizing button { user-select: auto !important; cursor: inherit; }
   display: inline-flex; align-items: center; gap: 8px; margin-top: 4px;
   font-size: 11px; color: var(--text-3); font-family: var(--mono);
 }
+.project-open-card { width: min(440px, 92vw); }
+.project-folder-list {
+  display: flex; flex-direction: column; gap: 6px; margin: 8px 0 10px;
+}
+.project-folder-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--bg-panel);
+}
+.project-folder-row .project-folder-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 13px; color: var(--text);
+}
+.project-folder-row .project-folder-path {
+  display: none;
+}
+.project-folder-row .tab-x { flex-shrink: 0; }
+.project-folder-add {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 10px; border: 1px dashed var(--line); border-radius: var(--radius);
+  background: transparent; color: var(--text-2); font-size: 13px;
+}
+.project-folder-add:hover { background: var(--hover); color: var(--text); }
 .git-strip.hidden { display: none; }
 .git-branch { color: var(--text-2); }
 .git-hash { color: var(--text-3); opacity: .85; }

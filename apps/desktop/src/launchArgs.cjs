@@ -107,6 +107,7 @@ function launchFingerprint(opts) {
     disableWebSearch: Boolean(o.disableWebSearch),
     experimentalMemory: Boolean(o.experimentalMemory),
     allowOutside: Boolean(o.allowOutside),
+    extraRoots: Array.isArray(o.extraRoots) ? [...o.extraRoots].sort() : [],
   });
 }
 

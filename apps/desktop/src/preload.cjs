@@ -19,8 +19,8 @@ contextBridge.exposeInMainWorld("grokBuild", {
   // ── Agent IPC surface (Phase A6 — keep renderer free of process logic) ──
   connect: (workspaceRoot, options) =>
     ipcRenderer.invoke("agent:connect", workspaceRoot ?? "", options || {}),
-  setWorkspace: (workspaceRoot) =>
-    ipcRenderer.invoke("app:setWorkspace", workspaceRoot ?? null),
+  setWorkspace: (workspaceRoot, extraRoots) =>
+    ipcRenderer.invoke("app:setWorkspace", workspaceRoot ?? null, extraRoots),
   setRecentProjects: (paths) =>
     ipcRenderer.invoke("app:setRecentProjects", paths || []),
   disconnect: () => ipcRenderer.invoke("agent:disconnect"),

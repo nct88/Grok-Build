@@ -2,6 +2,15 @@
 
 Public, versioned changes for Grok Build Desktop.
 
+## 0.5.35 — 2026-08-13
+
+- Stopped creating leftover Chat tabs when opening or switching a project; conversations stay under the left sidebar project.
+- Hid the session tab rail unless two chats are open at once, and started new chats from the sidebar instead.
+- Compacted the session header by removing the git hash and Create PR control.
+- Added an Open project dialog that can attach multiple source folders to one conversation.
+
+Release details are maintained in `docs/releases/0.5.35.md`.
+
 ## 0.5.34 — 2026-08-13
 
 - Moved the project folder picker from the conversation header to sit on the top-left of the composer, just above the message box.

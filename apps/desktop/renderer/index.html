@@ -90,11 +90,9 @@
                 <p id="workspaceLabel" class="conv-sub" data-i18n="noProject">No project</p>
                 <div id="gitStrip" class="git-strip hidden" title="Git status">
                   <span class="git-branch" id="gitBranch">—</span>
-                  <span class="git-hash hidden" id="gitHash"></span>
                   <span class="git-dirty hidden" id="gitDirty"></span>
                   <span class="git-sync hidden" id="gitSync"></span>
                   <a class="git-pr hidden" id="gitPr" href="#" target="_blank" rel="noreferrer"></a>
-                  <button type="button" class="git-pr-create hidden" id="gitPrCreate" title="Open create PR in browser">Create PR</button>
                 </div>
             </div>
             <div class="conv-actions">
@@ -704,6 +702,32 @@
     </div><!-- /main-stack -->
     </div><!-- /app-body -->
   </div><!-- /app -->
+
+  <div id="projectModal" class="modal hidden">
+    <div class="modal-card project-open-card">
+      <header class="modal-head">
+        <h2 id="projectModalTitle" data-i18n="openProjectTitle">Open project</h2>
+        <button id="btnCloseProjectModal" class="tab-x" type="button" aria-label="Close">×</button>
+      </header>
+      <div class="modal-body">
+        <p class="settings-lead" data-i18n="openProjectLead">Choose one or more folders. The agent can work across all of them in this chat.</p>
+        <label class="field">
+          <span data-i18n="projectName">Project name</span>
+          <input id="inpProjectName" type="text" data-i18n-placeholder="projectNamePh" placeholder="Optional — defaults to the first folder" autocomplete="off" />
+        </label>
+        <div class="settings-group-title" data-i18n="sourceFolders">Source folders</div>
+        <div id="projectFolderList" class="project-folder-list"></div>
+        <button type="button" class="project-folder-add" id="btnAddProjectFolder">
+          <span data-icon="folder" data-icon-size="14" aria-hidden="true"></span>
+          <span data-i18n="addFolder">Add folder</span>
+        </button>
+      </div>
+      <footer class="modal-foot">
+        <button id="btnCancelProjectModal" class="pill-btn" type="button" data-i18n="cancel">Cancel</button>
+        <button id="btnConfirmProjectModal" class="pill-btn accent" type="button" data-i18n="openProjectConfirm">Open project</button>
+      </footer>
+    </div>
+  </div>
 
   <div id="settingsModal" class="modal hidden">
     <div class="modal-card settings-card">
