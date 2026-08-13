@@ -2,6 +2,12 @@
 
 Public, versioned changes for Grok Build Desktop.
 
+## 0.5.34 — 2026-08-13
+
+- Moved the project folder picker from the conversation header to sit on the top-left of the composer, just above the message box.
+
+Release details are maintained in `docs/releases/0.5.34.md`.
+
 ## 0.5.33 — 2026-08-13
 
 - Kept the composer project and left sidebar on the same open folder after sending a message, and refreshed project chat history when a turn completes.

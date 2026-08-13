@@ -85,16 +85,7 @@
       <div class="work-row" id="workRow">
         <section class="col conversation" id="colConv">
           <header class="conv-header">
-            <div class="conv-header-left">
-              <div class="chip-dd chip-dd-header" id="ddProject">
-                <button type="button" class="chip-btn chip-project" id="btnProject" aria-haspopup="listbox" aria-expanded="false" title="Project">
-                  <span class="chip-ico" data-icon="folder" data-icon-size="14" aria-hidden="true"></span>
-                  <span class="chip-label" id="projectChipLabel" data-i18n="noProject">No project</span>
-                  <span class="chip-caret" data-icon="caret" data-icon-size="12" aria-hidden="true"></span>
-                </button>
-                <div class="chip-menu hidden" id="menuProject" role="listbox" aria-label="Projects"></div>
-              </div>
-              <div class="conv-title-wrap">
+            <div class="conv-title-wrap">
                 <h1 id="convTitle" class="conv-title">New conversation</h1>
                 <p id="workspaceLabel" class="conv-sub" data-i18n="noProject">No project</p>
                 <div id="gitStrip" class="git-strip hidden" title="Git status">
@@ -105,7 +96,6 @@
                   <a class="git-pr hidden" id="gitPr" href="#" target="_blank" rel="noreferrer"></a>
                   <button type="button" class="git-pr-create hidden" id="gitPrCreate" title="Open create PR in browser">Create PR</button>
                 </div>
-              </div>
             </div>
             <div class="conv-actions">
               <div id="usageChip" class="status-chip usage hidden" title="Session context">
@@ -156,6 +146,16 @@
             <div id="attachBar" class="attach-bar hidden"></div>
             <div id="mentionMenu" class="mention-menu hidden" role="listbox" aria-label="File mentions"></div>
             <div id="slashMenu" class="slash-menu hidden" role="listbox" aria-label="Slash commands"></div>
+            <div class="composer-project-row">
+              <div class="chip-dd" id="ddProject">
+                <button type="button" class="chip-btn chip-project" id="btnProject" aria-haspopup="listbox" aria-expanded="false" title="Project">
+                  <span class="chip-ico" data-icon="folder" data-icon-size="14" aria-hidden="true"></span>
+                  <span class="chip-label" id="projectChipLabel" data-i18n="noProject">No project</span>
+                  <span class="chip-caret" data-icon="caret" data-icon-size="12" aria-hidden="true"></span>
+                </button>
+                <div class="chip-menu hidden" id="menuProject" role="listbox" aria-label="Projects"></div>
+              </div>
+            </div>
             <div class="composer">
               <textarea id="prompt" rows="3" data-i18n-placeholder="messagePlaceholder" placeholder="Message… /imagine · @file · Enter to send" spellcheck="true" autocomplete="off"></textarea>
               <div class="composer-toolbar">
