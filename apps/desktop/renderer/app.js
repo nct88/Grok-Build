@@ -3434,7 +3434,10 @@
     wireChipDropdown("btnMode", "menuMode");
     wireChipDropdown("btnUsage", "menuUsage");
     $("btnUsage")?.addEventListener("click", () => {
-      if (!$("menuUsage")?.classList.contains("hidden")) void refreshUsage();
+      if (!$("menuUsage")?.classList.contains("hidden")) {
+        void refreshSessionInfo();
+        void refreshUsage();
+      }
     });
 
     const menuPerm = $("menuPermission");
@@ -4384,6 +4387,119 @@
   }
 
   let lastUsageManageUrl = "https://grok.com?_s=usage";
+  let lastSessionInfo = null;
+
+  function sessionInfoFieldRows(data) {
+    if (!data) return [];
+    const rows = [
+      [tt("sessionTitleLabel", "Title"), data.title],
+      [tt("shellVersion", "Shell version"), data.shellVersion],
+      [tt("authMethod", "Auth method"), data.authMethod],
+      [tt("sessionId", "Session ID"), data.sessionId],
+      [tt("workingDirectory", "Working directory"), data.workingDirectory],
+      [tt("sessionModelLabel", "Model"), data.model],
+      [tt("modelHash", "Model Hash"), data.modelHash],
+      [tt("apiBackend", "API Backend"), data.apiBackend],
+      [tt("sandbox", "Sandbox"), data.sandbox],
+      [tt("turns", "Turns"), data.turns],
+      [tt("reasoningEffort", "Reasoning effort"), data.reasoningEffort],
+      [tt("permissionMode", "Permission mode"), data.permissionMode],
+      [tt("created", "Created"), data.createdAt ? new Date(data.createdAt).toLocaleString() : null],
+      [tt("updated", "Updated"), data.updatedAt ? new Date(data.updatedAt).toLocaleString() : null],
+    ];
+    return rows.filter(([, value]) => value !== null && value !== undefined && value !== "");
+  }
+
+  function sessionInfoRow(label, value) {
+    const copy = String(value);
+    return (
+      `<button type="button" class="session-info-row" data-session-copy="${escapeHtml(copy)}" title="${escapeHtml(tt("clickToCopy", "Click to copy value"))}">` +
+      `<span class="session-info-row-key">${escapeHtml(label)}</span>` +
+      `<span class="session-info-row-value">${escapeHtml(copy)}</span>` +
+      `<span class="session-info-row-copy" data-icon="copy" data-icon-size="13" aria-hidden="true"></span>` +
+      `</button>`
+    );
+  }
+
+  function renderSessionInfo(data) {
+    lastSessionInfo = data || null;
+    const rows = sessionInfoFieldRows(data);
+    const rowsEl = $("sessionInfoRows");
+    const empty = $("sessionInfoEmpty");
+    if (rowsEl) rowsEl.innerHTML = rows.map(([label, value]) => sessionInfoRow(label, value)).join("");
+    if (empty) empty.classList.toggle("hidden", rows.length > 0);
+    const status = $("sessionInfoStatus");
+    if (status) {
+      status.textContent = data?.ok
+        ? `${data.state || tt("connected", "Connected")} · ${data.model || tt("defaultModel", "Default model")}`
+        : tt("noActiveSession", "Connect to start a session.");
+    }
+
+    const context = data?.context || {};
+    const pct = Number.isFinite(Number(context.percent)) ? Number(context.percent) : null;
+    const pctText = pct == null ? "—" : `${pct}%`;
+    if ($("sessionContextPercent")) $("sessionContextPercent").textContent = pctText;
+    if ($("sessionContextBar")) {
+      $("sessionContextBar").style.width = `${pct == null ? 0 : Math.min(100, Math.max(0, pct))}%`;
+    }
+    if ($("sessionContextBarWrap")) {
+      $("sessionContextBarWrap").setAttribute("aria-valuenow", String(pct == null ? 0 : Math.round(pct)));
+    }
+    if ($("sessionContextDetail")) {
+      $("sessionContextDetail").textContent =
+        context.used != null && context.size
+          ? `${formatInt(context.used)} / ${formatInt(context.size)} tokens (${pctText})`
+          : tt("waitingContext", "Waiting for context data.");
+    }
+    if (data?.context?.used != null) {
+      const label = $("usageComposerLabel");
+      if (label) label.textContent = pct == null ? tt("sessionInfo", "Session") : `${pctText}`;
+    }
+    window.GrokIcons?.applyAll?.($("menuUsage"));
+  }
+
+  async function refreshSessionInfo() {
+    const status = $("sessionInfoStatus");
+    if (status) status.textContent = tt("loading", "Loading…");
+    try {
+      if (!api.getSessionInfo) {
+        renderSessionInfo({ ok: false });
+        return;
+      }
+      renderSessionInfo(await api.getSessionInfo());
+    } catch (error) {
+      renderSessionInfo({ ok: false });
+      if (status) status.textContent = error?.message || String(error);
+    }
+  }
+
+  function activateSessionInfoTab(id) {
+    document.querySelectorAll("[data-session-info-tab]").forEach((tab) => {
+      const active = tab.dataset.sessionInfoTab === id;
+      tab.classList.toggle("active", active);
+      tab.setAttribute("aria-selected", String(active));
+    });
+    document.querySelectorAll("[data-session-info-panel]").forEach((panel) => {
+      panel.classList.toggle("active", panel.dataset.sessionInfoPanel === id);
+    });
+  }
+
+  async function copySessionInfoValue(value, label) {
+    if (!value || !api.writeClipboardText) return;
+    await api.writeClipboardText(String(value));
+    const status = $("sessionInfoStatus");
+    if (status) status.textContent = label || tt("copied", "Copied");
+  }
+
+  async function copyAllSessionInfo() {
+    const rows = sessionInfoFieldRows(lastSessionInfo);
+    const context = lastSessionInfo?.context || {};
+    if (context.used != null) rows.push([tt("contextUsed", "Context used"), formatInt(context.used)]);
+    if (context.size != null) rows.push([tt("contextWindow", "Context window"), formatInt(context.size)]);
+    if (context.percent != null) rows.push([tt("contextPercent", "Context used %"), `${context.percent}%`]);
+    const text = rows.map(([label, value]) => `${label}: ${value}`).join("\n");
+    await copySessionInfoValue(text, tt("copiedAll", "Copied all session info"));
+  }
 
   function usageRow(label, valueHtml) {
     return (
@@ -4413,16 +4529,42 @@
     });
   }
 
+  function sessionUsageHtml(session) {
+    if (!session || !(session.used || session.totalTokens || session.modelCalls || session.inputTokens)) return "";
+    const cached = session.cachedReadTokens
+      ? ` <span class="muted">(${formatInt(session.cachedReadTokens)} ${escapeHtml(tt("cached", "cached"))})</span>`
+      : "";
+    const reasoning = session.reasoningTokens
+      ? ` <span class="muted">(${formatInt(session.reasoningTokens)} ${escapeHtml(tt("reasoning", "reasoning"))})</span>`
+      : "";
+    const rows = [];
+    if (session.inputTokens != null) rows.push(usageRow(tt("inputTokens", "Input tokens"), `${formatInt(session.inputTokens)}${cached}`));
+    if (session.outputTokens != null) rows.push(usageRow(tt("outputTokens", "Output tokens"), `${formatInt(session.outputTokens)}${reasoning}`));
+    if (session.totalTokens != null || session.used != null) {
+      rows.push(usageRow(tt("totalTokens", "Total tokens"), formatInt(session.totalTokens ?? session.used)));
+    }
+    if (session.modelCalls != null || session.apiDurationMs != null) {
+      const calls = session.modelCalls != null ? formatInt(session.modelCalls) : "—";
+      const apiTime = session.apiDurationMs != null
+        ? ` · ${escapeHtml(tt("apiTime", "API time"))} ${formatApiDuration(session.apiDurationMs)}`
+        : "";
+      rows.push(usageRow(tt("modelCalls", "Model calls"), `${calls}${apiTime}`));
+    }
+    if (session.costUsd != null) rows.push(usageRow(tt("cost", "Cost"), formatUsd(session.costUsd)));
+    return rows.join("");
+  }
+
   function renderUsage(data) {
     if (data?.manageUrl) lastUsageManageUrl = data.manageUrl;
 
     if (!data || (!data.ok && !data.session && !data.plan)) {
+      const localSessionHtml = sessionUsageHtml(lastSessionInfo?.context);
       eachUsage(".js-usage-session-rows", (el) => {
-        el.innerHTML = "";
+        el.innerHTML = localSessionHtml;
       });
       eachUsage(".js-usage-session-empty", (el) => {
-        el.classList.remove("hidden");
-        el.textContent = data?.error || tt("noSessionUsage", "No model calls yet.");
+        el.classList.toggle("hidden", Boolean(localSessionHtml));
+        el.textContent = tt("noSessionUsage", "No model calls yet.");
       });
       eachUsage(".js-usage-plan-rows", (el) => {
         el.innerHTML = "";
@@ -4444,21 +4586,7 @@
       el.classList.toggle("hidden", Boolean(hasSession));
     });
     if (hasSession) {
-      const cached = s.cachedReadTokens
-        ? ` <span class="muted">(${formatInt(s.cachedReadTokens)} ${escapeHtml(tt("cached", "cached"))})</span>`
-        : "";
-      const reasoning = s.reasoningTokens
-        ? ` <span class="muted">(${formatInt(s.reasoningTokens)} ${escapeHtml(tt("reasoning", "reasoning"))})</span>`
-        : "";
-      const html =
-        usageRow(tt("inputTokens", "Input tokens"), `${formatInt(s.inputTokens)}${cached}`) +
-        usageRow(tt("outputTokens", "Output tokens"), `${formatInt(s.outputTokens)}${reasoning}`) +
-        usageRow(tt("totalTokens", "Total tokens"), formatInt(s.totalTokens)) +
-        usageRow(
-          tt("modelCalls", "Model calls"),
-          `${formatInt(s.modelCalls)} · ${escapeHtml(tt("apiTime", "API time"))} ${formatApiDuration(s.apiDurationMs)}`,
-        ) +
-        usageRow(tt("cost", "Cost"), formatUsd(s.costUsd));
+      const html = sessionUsageHtml(s);
       eachUsage(".js-usage-session-rows", (el) => {
         el.innerHTML = html;
       });
@@ -5231,6 +5359,7 @@
         void drainQueue();
         void refreshHistory();
         setTimeout(() => void refreshHistory(), 1600);
+        if (!$("menuUsage")?.classList.contains("hidden")) void refreshSessionInfo();
         break;
       }
       case "model_catalog":
@@ -5238,6 +5367,7 @@
         break;
       case "session":
         activeSessionId = event.sessionId || activeSessionId;
+        if (!$("menuUsage")?.classList.contains("hidden")) void refreshSessionInfo();
         sessionTabs?.updateActive?.({
           sessionId: activeSessionId,
           title: event.resumed
@@ -6404,6 +6534,20 @@
   document.querySelectorAll(".js-refresh-usage, #btnRefreshUsage").forEach((btn) => {
     btn.addEventListener("click", () => void refreshUsage());
   });
+  document.querySelectorAll(".js-refresh-session-info").forEach((btn) => {
+    btn.addEventListener("click", () => void refreshSessionInfo());
+  });
+  $("menuUsage")?.addEventListener("click", (event) => {
+    const tab = event.target.closest?.("[data-session-info-tab]");
+    if (tab) {
+      activateSessionInfoTab(tab.dataset.sessionInfoTab);
+      if (tab.dataset.sessionInfoTab === "account") void refreshUsage();
+      return;
+    }
+    const row = event.target.closest?.("[data-session-copy]");
+    if (row) void copySessionInfoValue(row.dataset.sessionCopy, tt("copied", "Copied"));
+  });
+  $("btnCopySessionInfo")?.addEventListener("click", () => void copyAllSessionInfo());
   document.querySelectorAll(".js-manage-billing, #btnManageBilling").forEach((btn) => {
     btn.addEventListener("click", () => {
       void api.openExternal?.(lastUsageManageUrl || "https://grok.com?_s=usage");

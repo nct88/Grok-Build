@@ -116,6 +116,36 @@ try {
       globalThis.__codexPathActions.push({ action: "copy", target });
       return { ok: true };
     });
+    ipcMain.removeHandler("app:getSessionInfo");
+    ipcMain.handle("app:getSessionInfo", async () => ({
+      ok: true,
+      state: "connected",
+      title: "Nâng cấp thông tin session Grok Build",
+      shellVersion: "1.0.3",
+      authMethod: "OAuth",
+      sessionId: "81f5b741-e66d-4a7f-a10a-b2f3799e27db",
+      workingDirectory: "C:\\work\\grok-build",
+      model: "grok-4.6",
+      modelHash: "1a29d5bc12",
+      apiBackend: "responses",
+      sandbox: "workspace",
+      turns: 4,
+      reasoningEffort: "high",
+      permissionMode: "ask",
+      createdAt: "2026-08-13T08:00:00.000Z",
+      updatedAt: "2026-08-13T08:30:00.000Z",
+      context: {
+        used: 32000,
+        size: 128000,
+        percent: 25,
+        inputTokens: 30000,
+        outputTokens: 2000,
+        reasoningTokens: 800,
+        modelCalls: 4,
+        apiDurationMs: 9123,
+        costUsd: 0.25,
+      },
+    }));
     BrowserWindow.getAllWindows()[0].webContents.send("agent:event", {
       type: "state",
       state: "connected",
@@ -392,6 +422,58 @@ try {
     if (firstTool) firstTool.open = false;
   });
   await page.screenshot({ path: path.join(evidenceDir, "codex-session-dark-1440x900.png") });
+
+  await page.locator("#btnUsage").click();
+  await page.locator("#sessionInfoRows .session-info-row").first().waitFor();
+  const sessionInfoGeometry = await page.locator("#menuUsage").evaluate((menu) => {
+    const rect = menu.getBoundingClientRect();
+    return {
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
+      horizontalOverflow: menu.scrollWidth > menu.clientWidth,
+      rows: menu.querySelectorAll("#sessionInfoRows .session-info-row").length,
+      tabs: menu.querySelectorAll("[data-session-info-tab]").length,
+    };
+  });
+  if (
+    sessionInfoGeometry.left < -1 ||
+    sessionInfoGeometry.right > sessionInfoGeometry.viewportWidth + 1 ||
+    sessionInfoGeometry.top < -1 ||
+    sessionInfoGeometry.bottom > sessionInfoGeometry.viewportHeight + 1 ||
+    sessionInfoGeometry.horizontalOverflow ||
+    sessionInfoGeometry.rows < 12 ||
+    sessionInfoGeometry.tabs !== 3
+  ) {
+    failures.push(`rich session info layout ${JSON.stringify(sessionInfoGeometry)}`);
+  }
+  await page.locator("#sessionInfoRows .session-info-row").first().click();
+  await page.locator("#btnCopySessionInfo").click();
+  await page.waitForTimeout(40);
+  const sessionCopyActions = await electronApp.evaluate(() => globalThis.__codexPathActions || []);
+  if (!sessionCopyActions.some((entry) => entry.action === "copy" && entry.target === "Nâng cấp thông tin session Grok Build")) {
+    failures.push(`session row copy missing ${JSON.stringify(sessionCopyActions.slice(-4))}`);
+  }
+  if (!sessionCopyActions.some((entry) => entry.action === "copy" && /Session ID: 81f5b741/.test(entry.target))) {
+    failures.push(`session Copy all missing fields ${JSON.stringify(sessionCopyActions.slice(-4))}`);
+  }
+  await page.screenshot({ path: path.join(evidenceDir, "codex-session-info-dark-1440x900.png") });
+  await page.locator('[data-session-info-tab="context"]').click();
+  const contextInfo = await page.evaluate(() => ({
+    active: document.querySelector('[data-session-info-panel="context"]')?.classList.contains("active"),
+    width: document.querySelector("#sessionContextBar")?.getBoundingClientRect().width || 0,
+    text: document.querySelector("#sessionContextDetail")?.textContent || "",
+    rows: document.querySelectorAll(".js-usage-session-rows .usage-row").length,
+  }));
+  if (!contextInfo.active || contextInfo.width <= 0 || !contextInfo.text.includes("32,000") || contextInfo.rows < 5) {
+    failures.push(`session context tab ${JSON.stringify(contextInfo)}`);
+  }
+  await page.screenshot({ path: path.join(evidenceDir, "codex-session-context-dark-1440x900.png") });
+  await page.locator("#btnUsage").click();
+
   await page.locator("#btnTheme").click();
   await page.waitForTimeout(180);
   await page.screenshot({ path: path.join(evidenceDir, "codex-session-light-1440x900.png") });
@@ -462,6 +544,31 @@ try {
     await page.keyboard.press("Escape");
   }
   await page.screenshot({ path: path.join(evidenceDir, "codex-session-dark-1000x640.png") });
+  await page.locator("#btnUsage").click();
+  await page.locator("#menuUsage:not(.hidden)").waitFor();
+  const compactSessionInfo = await page.locator("#menuUsage").evaluate((menu) => {
+    const rect = menu.getBoundingClientRect();
+    return {
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
+      horizontalOverflow: menu.scrollWidth > menu.clientWidth,
+    };
+  });
+  if (
+    compactSessionInfo.left < -1 ||
+    compactSessionInfo.right > compactSessionInfo.viewportWidth + 1 ||
+    compactSessionInfo.top < -1 ||
+    compactSessionInfo.bottom > compactSessionInfo.viewportHeight + 1 ||
+    compactSessionInfo.horizontalOverflow
+  ) {
+    failures.push(`compact session info ${JSON.stringify(compactSessionInfo)}`);
+  }
+  await page.screenshot({ path: path.join(evidenceDir, "codex-session-info-vietnamese-dark-1000x640.png") });
+  await page.locator("#btnUsage").click();
 
   await setWindowSize(1180, 640);
   await page.waitForTimeout(80);

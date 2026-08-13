@@ -952,6 +952,107 @@ function readSessionUsageFromDisk(workspaceRoot, sessionId) {
   return null;
 }
 
+/**
+ * Build the safe, local half of Grok CLI 1.0.3 `/session-info`.
+ *
+ * The ACP SDK does not expose the private `x.ai/session/info` extension, so the
+ * desktop derives the same stable fields from the session summary, cumulative
+ * usage update, model cache, launch options, and auth metadata. Secret values
+ * from auth/config files never cross IPC.
+ */
+function readPackageSessionInfo() {
+  const workspaceRoot = getConnectedWorkspace() || loadState().workspaceRoot || null;
+  const client = getClient();
+  const sessionId = client?.sessionId || null;
+  const connectOptions = getConnectOptions() || {};
+  const state = loadState();
+  const usage = readSessionUsageFromDisk(workspaceRoot, sessionId);
+  const candidates = findSessionDirCandidates(workspaceRoot, sessionId);
+  let summary = null;
+  for (const candidate of candidates) {
+    try {
+      const summaryPath = path.join(candidate, "summary.json");
+      if (!fs.existsSync(summaryPath)) continue;
+      summary = readJsonFile(summaryPath);
+      break;
+    } catch {
+      // Active sessions can briefly have a locked/incomplete summary. Keep the
+      // runtime fields and retry on the next refresh.
+    }
+  }
+
+  const model =
+    summary?.current_model_id ||
+    connectOptions.model ||
+    state.model ||
+    null;
+  let modelInfo = null;
+  try {
+    const cache = readJsonFile(path.join(grokHomeDir(), "models_cache.json"));
+    const cached = model && cache?.models && cache.models[model];
+    modelInfo = cached?.info && typeof cached.info === "object" ? cached.info : null;
+  } catch {
+    modelInfo = null;
+  }
+
+  const auth = readAuthProfile();
+  const authMethod = process.env.XAI_API_KEY
+    ? "API key (XAI_API_KEY)"
+    : auth.authMode
+      ? String(auth.authMode).toLowerCase().includes("oauth")
+        ? "OAuth"
+        : String(auth.authMode)
+      : auth.loggedIn
+        ? "OAuth"
+        : "Not signed in";
+  const contextSize = Number(modelInfo?.context_window) || null;
+  const contextUsed = usage?.totalTokens != null ? Number(usage.totalTokens) : null;
+  const contextPercent =
+    contextSize && contextUsed != null
+      ? Math.min(100, Math.max(0, Math.round((contextUsed / contextSize) * 1000) / 10))
+      : null;
+  const title =
+    summary?.generated_title ||
+    summary?.session_title ||
+    summary?.session_summary ||
+    null;
+
+  return {
+    ok: Boolean(sessionId),
+    state: client?.connectionState || "disconnected",
+    title,
+    shellVersion: getGrokCliVersion() || null,
+    authMethod,
+    sessionId,
+    workingDirectory: summary?.info?.cwd || workspaceRoot || null,
+    model,
+    modelHash: null,
+    apiBackend: modelInfo?.api_backend || null,
+    sandbox: summary?.sandbox_profile || connectOptions.sandbox || state.sandbox || "CLI default",
+    turns: usage?.numTurns != null ? Number(usage.numTurns) : null,
+    reasoningEffort:
+      summary?.reasoning_effort || connectOptions.effort || state.effort || "CLI default",
+    permissionMode:
+      connectOptions.permissionMode || state.permissionMode || "default",
+    agentName: summary?.agent_name || "Grok Build",
+    createdAt: summary?.created_at || null,
+    updatedAt: summary?.updated_at || null,
+    context: {
+      used: contextUsed,
+      size: contextSize,
+      percent: contextPercent,
+      inputTokens: usage?.inputTokens ?? null,
+      outputTokens: usage?.outputTokens ?? null,
+      cachedReadTokens: usage?.cachedReadTokens ?? null,
+      cacheCreationTokens: usage?.cacheCreationTokens ?? null,
+      reasoningTokens: usage?.reasoningTokens ?? null,
+      modelCalls: usage?.modelCalls ?? null,
+      apiDurationMs: usage?.apiDurationMs ?? null,
+      costUsd: usage?.costUsd ?? null,
+    },
+  };
+}
+
 function periodTypeLabel(periodType, startIso, endIso) {
   const t = String(periodType || "");
   if (/WEEKLY|week/i.test(t)) return "Weekly limit";
@@ -1760,6 +1861,9 @@ app.whenReady().then(() => {
 
   /** Package usage (/usage) — same billing data as Grok TUI. Never returns tokens. */
   ipcMain.handle("app:getUsage", async () => fetchPackageUsage());
+
+  /** Safe local metadata matching Grok CLI 1.0.3 `/session-info`. */
+  ipcMain.handle("app:getSessionInfo", () => readPackageSessionInfo());
 
   ipcMain.handle("app:login", async () => {
     const result = await runGrokCliArgs(["login"], {

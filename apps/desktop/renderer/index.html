@@ -214,22 +214,54 @@
                     </select>
                   </div>
                   <div class="chip-dd" id="ddUsage">
-                    <button type="button" class="chip-btn chip-usage" id="btnUsage" aria-haspopup="dialog" aria-expanded="false" data-i18n-title="usage" title="Usage">
+                    <button type="button" class="chip-btn chip-usage" id="btnUsage" aria-haspopup="dialog" aria-expanded="false" title="Session info">
                       <span class="chip-ico" data-icon="gauge" data-icon-size="14" aria-hidden="true"></span>
-                      <span class="chip-label" id="usageComposerLabel" data-i18n="usage">Usage</span>
+                      <span class="chip-label" id="usageComposerLabel" data-i18n="sessionInfo">Session</span>
                       <span class="chip-caret" data-icon="caret" data-icon-size="12" aria-hidden="true"></span>
                     </button>
-                    <div class="chip-menu chip-menu-usage hidden" id="menuUsage" role="dialog" aria-label="Usage">
+                    <div class="chip-menu chip-menu-usage hidden" id="menuUsage" role="dialog" aria-label="Session information">
+                      <header class="session-info-head">
+                        <div>
+                          <strong data-i18n="sessionInfo">Session info</strong>
+                          <span id="sessionInfoStatus" data-i18n="sessionInfoHint">Live details from Grok CLI and ACP</span>
+                        </div>
+                        <div class="session-info-head-actions">
+                          <button type="button" class="session-info-icon js-refresh-session-info" aria-label="Refresh session information" title="Refresh session information"><span data-icon="refresh" data-icon-size="14"></span></button>
+                          <button type="button" class="session-info-copy-all" id="btnCopySessionInfo" data-i18n="copyAll">Copy all</button>
+                        </div>
+                      </header>
+                      <div class="session-info-tabs" role="tablist" aria-label="Session information sections">
+                        <button type="button" class="session-info-tab active" role="tab" aria-selected="true" data-session-info-tab="session" data-i18n="session">Session</button>
+                        <button type="button" class="session-info-tab" role="tab" aria-selected="false" data-session-info-tab="context" data-i18n="context">Context</button>
+                        <button type="button" class="session-info-tab" role="tab" aria-selected="false" data-session-info-tab="account" data-i18n="account">Account</button>
+                      </div>
                       <div class="usage-stack usage-popover" id="usagePopover" aria-live="polite">
-                        <div class="usage-card">
+                        <section class="session-info-panel active" data-session-info-panel="session">
+                          <div class="session-info-rows" id="sessionInfoRows"></div>
+                          <p class="usage-empty" id="sessionInfoEmpty" data-i18n="noActiveSession">Connect to start a session.</p>
+                        </section>
+                        <section class="session-info-panel" data-session-info-panel="context">
+                          <div class="session-context-summary">
+                            <div class="usage-card-head">
+                              <h4 class="usage-card-title" data-i18n="contextWindow">Context window</h4>
+                              <p class="usage-card-sub" id="sessionContextPercent">—</p>
+                            </div>
+                            <div class="usage-bar-wrap" id="sessionContextBarWrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                              <div class="usage-bar" id="sessionContextBar" style="width:0%"></div>
+                            </div>
+                            <p class="usage-meta" id="sessionContextDetail" data-i18n="waitingContext">Waiting for context data.</p>
+                          </div>
+                          <div class="usage-card session-context-card">
                           <div class="usage-card-head">
                             <h4 class="usage-card-title" data-i18n="sessionUsage">This session</h4>
                             <p class="usage-card-sub js-usage-session-sub" data-i18n="sessionUsageSub">Since start or last resume</p>
                           </div>
                           <div class="usage-rows js-usage-session-rows"></div>
                           <p class="usage-empty hidden js-usage-session-empty" data-i18n="noSessionUsage">No model usage in this session yet.</p>
-                        </div>
-                        <div class="usage-card">
+                          </div>
+                        </section>
+                        <section class="session-info-panel" data-session-info-panel="account">
+                          <div class="usage-card">
                           <div class="usage-card-head">
                             <h4 class="usage-card-title js-usage-plan-title" data-i18n="planLimit">Plan limit</h4>
                             <p class="usage-card-sub js-usage-plan-pct">—</p>
@@ -238,8 +270,9 @@
                             <div class="usage-bar js-usage-plan-bar" style="width:0%"></div>
                           </div>
                           <div class="usage-rows js-usage-plan-rows"></div>
-                        </div>
-                        <p class="usage-meta js-usage-meta"></p>
+                          </div>
+                          <p class="usage-meta js-usage-meta"></p>
+                        </section>
                       </div>
                       <div class="usage-pop-actions">
                         <button type="button" class="pill-btn accent js-refresh-usage" id="btnPopRefreshUsage"><span data-icon="refresh" data-icon-size="14"></span> <span data-i18n="refreshUsage">Refresh</span></button>

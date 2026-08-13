@@ -1,6 +1,6 @@
 {
     "name":  "grok-build",
-    "version":  "0.5.35",
+    "version":  "0.5.36",
     "private":  true,
     "description":  "Grok Build product monorepo — agent desktop (CLI/ACP) primary; Code-OSS IDE optional",
     "workspaces":  [

@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld("grokBuild", {
   openMicSettings: () => ipcRenderer.invoke("app:openMicSettings"),
   getAuthProfile: () => ipcRenderer.invoke("app:getAuthProfile"),
   getUsage: () => ipcRenderer.invoke("app:getUsage"),
+  getSessionInfo: () => ipcRenderer.invoke("app:getSessionInfo"),
   login: () => ipcRenderer.invoke("app:login"),
   logout: () => ipcRenderer.invoke("app:logout"),
   saveSettings: (settings) => ipcRenderer.invoke("app:saveSettings", settings),

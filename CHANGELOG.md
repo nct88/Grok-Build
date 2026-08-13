@@ -2,6 +2,15 @@
 
 Public, versioned changes for Grok Build Desktop.
 
+## 0.5.36 — 2026-08-13
+
+- Added a Grok CLI 1.0.3-style Session info surface with separate Session, Context and Account tabs.
+- Added safe local metadata for session title, CLI version, authentication method, session ID, workspace, model, API backend, sandbox, turns, reasoning effort and permission mode.
+- Added cumulative token, cache, reasoning, model-call, API-time and cost details without depending on account billing availability.
+- Added click-to-copy rows and Copy all, with responsive English/Vietnamese layouts and regression coverage at 1000×640 and 1440×900.
+
+Release details are maintained in `docs/releases/0.5.36.md`.
+
 ## 0.5.35 — 2026-08-13
 
 - Stopped creating leftover Chat tabs when opening or switching a project; conversations stay under the left sidebar project.
