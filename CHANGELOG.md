@@ -2,6 +2,16 @@
 
 Public, versioned changes for Grok Build Desktop.
 
+## 0.5.37 — 2026-08-17
+
+- Added workspace/profile Grok skills to the Desktop slash menu through the local `grok inspect` catalog.
+- Limited dynamic shortcuts to user-invocable skills stored under the active workspace or `%GROK_HOME%`, avoiding bundled and marketplace cache noise.
+- Added explicit skill invocation, fail-closed discovery, request race protection and stable built-in command precedence.
+- Improved long-command overflow, tooltips, scrolling and titlebar-safe menu height at 100%, 125% and 150% scale.
+- Added local catalog and visual regression gates for filtering, keyboard insertion, no-match, unavailable and many-item states.
+
+Release details are maintained in `docs/releases/0.5.37.md`.
+
 ## 0.5.36 — 2026-08-13
 
 - Added a Grok CLI 1.0.3-style Session info surface with separate Session, Context and Account tabs.

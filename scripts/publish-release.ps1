@@ -46,6 +46,17 @@ function Find-NodeBin {
   return $null
 }
 
+function Get-Sha256([string]$Path) {
+  $stream = [System.IO.File]::OpenRead($Path)
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    return (($sha.ComputeHash($stream) | ForEach-Object { $_.ToString("X2") }) -join "")
+  } finally {
+    $sha.Dispose()
+    $stream.Dispose()
+  }
+}
+
 $bin = Find-NodeBin
 if (-not $bin) { throw "Node.js not found. Install Node or set PATH." }
 $env:PATH = "$bin;$env:PATH"
@@ -290,7 +301,7 @@ function FileInfo([string]$path, [string]$relativePath) {
     file = $i.Name
     relativePath = $relativePath.Replace('\', '/')
     bytes = $i.Length
-    sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $i.FullName).Hash
+    sha256 = Get-Sha256 $i.FullName
   }
 }
 

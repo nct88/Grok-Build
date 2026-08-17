@@ -37,11 +37,22 @@ function Read-Json([string]$Path) {
   return Get-Content -Raw -LiteralPath $Path -Encoding UTF8 | ConvertFrom-Json
 }
 
+function Get-Sha256([string]$Path) {
+  $stream = [System.IO.File]::OpenRead($Path)
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    return (($sha.ComputeHash($stream) | ForEach-Object { $_.ToString("X2") }) -join "")
+  } finally {
+    $sha.Dispose()
+    $stream.Dispose()
+  }
+}
+
 function Assert-Hash([string]$Path, [string]$ExpectedHash) {
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
     throw "Release artifact is missing: $Path"
   }
-  $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash
+  $actual = Get-Sha256 $Path
   if ($actual -ne $ExpectedHash) {
     throw "SHA-256 mismatch for $Path. Expected $ExpectedHash, got $actual."
   }
@@ -102,7 +113,7 @@ $artifacts = @(
   },
   [pscustomobject]@{
     Path = $manifestPath
-    Hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $manifestPath).Hash
+    Hash = Get-Sha256 $manifestPath
     Bytes = (Get-Item -LiteralPath $manifestPath).Length
   }
 )

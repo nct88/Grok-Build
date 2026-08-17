@@ -1251,6 +1251,7 @@
     renderProjects();
     renderProjectMenu();
     updateProjectChip();
+    void refreshSlashCommands();
     void refreshGitStrip();
     // Terminal follows project folder (not recents sandbox)
     updateTermCwdLabel(root || "");
@@ -2027,6 +2028,21 @@
 
   // ── Slash command menu (/imagine, /settings, …) ──
   let slashActiveIndex = 0;
+  let slashCatalogRequest = 0;
+
+  async function refreshSlashCommands() {
+    const SC = globalThis.GrokSlashCommands;
+    if (!SC?.setRuntimeCommands || !api.slashCommands) return;
+    const request = ++slashCatalogRequest;
+    try {
+      const items = await api.slashCommands(workspaceRoot);
+      if (request !== slashCatalogRequest) return;
+      SC.setRuntimeCommands(items);
+      if (prompt?.value?.startsWith("/")) onPromptInputForSlash();
+    } catch {
+      if (request === slashCatalogRequest) SC.setRuntimeCommands([]);
+    }
+  }
 
   function hideSlashMenu() {
     const menu = $("slashMenu");
@@ -2046,11 +2062,13 @@
     slashActiveIndex = 0;
     menu.classList.remove("hidden");
     menu.innerHTML = "";
+    menu.scrollTop = 0;
     spec.items.forEach((cmd, idx) => {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "slash-item" + (idx === 0 ? " active" : "");
       b.role = "option";
+      b.title = cmd.description || cmd.hint || cmd.label;
       b.innerHTML = `<span class="slash-cmd">${escapeHtml(cmd.label)}</span><span class="slash-hint">${escapeHtml(cmd.hint || "")}</span>`;
       b.onmousedown = (e) => {
         e.preventDefault();

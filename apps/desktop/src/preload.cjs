@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld("grokBuild", {
   getAuthProfile: () => ipcRenderer.invoke("app:getAuthProfile"),
   getUsage: () => ipcRenderer.invoke("app:getUsage"),
   getSessionInfo: () => ipcRenderer.invoke("app:getSessionInfo"),
+  slashCommands: (workspaceRoot) =>
+    ipcRenderer.invoke("app:getSlashCommands", workspaceRoot ?? null),
   login: () => ipcRenderer.invoke("app:login"),
   logout: () => ipcRenderer.invoke("app:logout"),
   saveSettings: (settings) => ipcRenderer.invoke("app:saveSettings", settings),

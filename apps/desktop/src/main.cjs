@@ -45,6 +45,7 @@ const {
 } = require("./productPaths.cjs");
 const { AgentSupervisor } = require("./agentSupervisor.cjs");
 const { loadMarketplaceCatalog } = require("./marketplaceCatalog.cjs");
+const { loadLocalSlashCommands } = require("./slashCatalog.cjs");
 const { execFile } = require("node:child_process");
 
 /** @type {import('electron').BrowserWindow | null} */
@@ -1864,6 +1865,22 @@ app.whenReady().then(() => {
 
   /** Safe local metadata matching Grok CLI 1.0.3 `/session-info`. */
   ipcMain.handle("app:getSessionInfo", () => readPackageSessionInfo());
+
+  /** Workspace/profile skills exposed as Desktop slash shortcuts. */
+  ipcMain.handle("app:getSlashCommands", async (_e, requestedWorkspace) => {
+    const raw = typeof requestedWorkspace === "string" ? requestedWorkspace.trim() : "";
+    const workspaceRoot =
+      raw && fs.existsSync(raw) && fs.statSync(raw).isDirectory()
+        ? path.resolve(raw)
+        : loadState().workspaceRoot || "";
+    return loadLocalSlashCommands({
+      executable: resolveGrokExecutable(),
+      workspaceRoot,
+      cwd: workspaceRoot || getRecentsWorkspace(),
+      grokHome: grokHomeDir(),
+      environment: grokEnv(),
+    });
+  });
 
   ipcMain.handle("app:login", async () => {
     const result = await runGrokCliArgs(["login"], {

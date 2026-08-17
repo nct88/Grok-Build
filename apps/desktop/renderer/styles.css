@@ -895,7 +895,7 @@ body.resizing button { user-select: auto !important; cursor: inherit; }
 /* P2 file mentions + slash commands */
 .mention-menu, .slash-menu {
   position: absolute; left: 12px; right: 12px; bottom: 100%;
-  max-height: 220px; overflow: auto; z-index: 40;
+  max-height: min(220px, max(96px, calc(100vh - 260px))); overflow: auto; z-index: 40;
   margin-bottom: 4px; border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--bg-panel); box-shadow: var(--shadow);
 }
@@ -910,8 +910,14 @@ body.resizing button { user-select: auto !important; cursor: inherit; }
 .mention-item:hover, .mention-item.active,
 .slash-item:hover, .slash-item.active { background: var(--hover); color: var(--text); }
 .mention-item:last-child, .slash-item:last-child { border-bottom: 0; }
-.slash-cmd { font-family: var(--mono); font-weight: 600; color: var(--text); flex: 0 0 auto; }
-.slash-hint { font-size: 11px; color: var(--text-3); flex: 1; min-width: 0; }
+.slash-cmd {
+  font-family: var(--mono); font-weight: 600; color: var(--text); flex: 0 1 auto;
+  max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.slash-hint {
+  font-size: 11px; color: var(--text-3); flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* Media previews in timeline (Imagine / attachments) */
 .media-strip {

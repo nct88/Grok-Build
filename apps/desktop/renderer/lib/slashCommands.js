@@ -26,8 +26,8 @@
     return "";
   }
 
-  /** @type {{ id: string, label: string, hint?: string, insert: string, expand?: (arg: string, ctx?: SlashContext) => string }[]} */
-  const COMMANDS = [
+  /** @type {{ id: string, label: string, hint?: string, description?: string, insert: string, kind?: string, expand?: ((arg: string, ctx?: SlashContext) => string)|null }[]} */
+  const BUILTIN_COMMANDS = [
     {
       id: "imagine",
       label: "/imagine",
@@ -113,6 +113,38 @@
       expand: null,
     },
   ];
+  const COMMANDS = [...BUILTIN_COMMANDS];
+
+  function skillPrompt(id, arg) {
+    const request = String(arg || "").trim();
+    if (!request) return `Use the ${id} skill and follow it for the current request.`;
+    return `Use the ${id} skill and follow it.\nUser request: ${request}`;
+  }
+
+  /** Replace commands discovered from the active workspace/profile. */
+  function setRuntimeCommands(items) {
+    const builtinIds = new Set(BUILTIN_COMMANDS.map((command) => command.id));
+    const seen = new Set();
+    const runtime = [];
+    for (const item of Array.isArray(items) ? items : []) {
+      const id = String(item?.id || "").trim().toLowerCase();
+      if (!/^[a-z][a-z0-9_-]{0,63}$/.test(id) || builtinIds.has(id) || seen.has(id)) continue;
+      if (item?.kind !== "skill") continue;
+      seen.add(id);
+      runtime.push({
+        id,
+        label: `/${id}`,
+        hint: String(item.hint || "Local Grok skill"),
+        description: String(item.description || item.hint || "Local Grok skill"),
+        insert: `/${id} `,
+        kind: "skill",
+        expand: (arg) => skillPrompt(id, arg),
+      });
+    }
+    runtime.sort((a, b) => a.id.localeCompare(b.id));
+    COMMANDS.splice(BUILTIN_COMMANDS.length, COMMANDS.length, ...runtime);
+    return runtime;
+  }
 
   /**
    * Detect `/command rest` at start of prompt.
@@ -252,6 +284,9 @@
 
   globalThis.GrokSlashCommands = {
     COMMANDS,
+    BUILTIN_COMMANDS,
+    setRuntimeCommands,
+    skillPrompt,
     parseLeadingSlash,
     resolveSlash,
     menuForInput,

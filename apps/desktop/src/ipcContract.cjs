@@ -10,6 +10,7 @@ const INVOKE_CHANNELS = [
   "app:openMicSettings",
   "app:getAuthProfile",
   "app:getUsage",
+  "app:getSlashCommands",
   "app:login",
   "app:logout",
   "app:saveSettings",
