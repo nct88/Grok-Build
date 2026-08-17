@@ -16,6 +16,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module Microsoft.PowerShell.Security -ErrorAction Stop
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $root
 $publishRoot = Join-Path $root "dist\$Version"
