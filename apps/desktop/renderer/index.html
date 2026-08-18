@@ -88,6 +88,7 @@
             <div class="conv-title-wrap">
                 <h1 id="convTitle" class="conv-title">New conversation</h1>
                 <p id="workspaceLabel" class="conv-sub" data-i18n="noProject">No project</p>
+                <p id="sessionFlowStrip" class="session-flow-strip hidden" hidden></p>
                 <div id="gitStrip" class="git-strip hidden" title="Git status">
                   <span class="git-branch" id="gitBranch">—</span>
                   <span class="git-dirty hidden" id="gitDirty"></span>
@@ -155,7 +156,7 @@
               </div>
             </div>
             <div class="composer">
-              <textarea id="prompt" rows="3" data-i18n-placeholder="messagePlaceholder" placeholder="Message… /imagine · @file · Enter to send" spellcheck="true" autocomplete="off"></textarea>
+              <textarea id="prompt" rows="3" data-i18n-placeholder="messagePlaceholder" placeholder="Message… /new /recap /context · @file · Enter to send" spellcheck="true" autocomplete="off"></textarea>
               <div class="composer-toolbar">
                 <div class="composer-left">
                   <button id="btnAttach" class="ghost-icon" type="button" data-i18n-title="attach" data-i18n-aria="attach" title="Attach files" aria-label="Attach">

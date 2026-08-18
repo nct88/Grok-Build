@@ -313,6 +313,18 @@ try {
   fail("launchArgs", e);
 }
 
+try {
+  const acp = await import(pathToFileURL(path.join(root, "packages/acp-client/dist/index.js")).href);
+  const meta = acp.sessionRequestMeta({ reasoningEffort: "xhigh" });
+  if (meta.reasoningEffort !== "xhigh" || meta.reasoning_effort !== "xhigh") {
+    throw new Error(JSON.stringify(meta));
+  }
+  if (acp.sessionRequestMeta({ reasoningEffort: "nope" })) throw new Error("invalid effort leaked");
+  ok("ACP session/new reasoning-effort meta");
+} catch (e) {
+  fail("ACP session meta", e);
+}
+
 // P1 AgentSupervisor (mocked ACP)
 try {
   const { AgentSupervisor } = require(path.join(root, "apps/desktop/src/agentSupervisor.cjs"));

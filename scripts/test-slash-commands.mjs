@@ -70,24 +70,46 @@ vm.createContext(context);
 vm.runInContext(source, context);
 const slash = context.globalThis.GrokSlashCommands;
 
-assert.deepEqual(
-  Array.from(slash.COMMANDS, (command) => command.id),
-  ["imagine", "imagine-video", "usage", "settings", "marketplace", "plugins"],
-);
+const builtinIds = Array.from(slash.COMMANDS, (command) => command.id);
+for (const id of [
+  "new",
+  "session-info",
+  "context",
+  "compact",
+  "recap",
+  "rewind",
+  "copy",
+  "export",
+  "rename",
+  "model",
+  "effort",
+  "plan",
+  "btw",
+  "imagine",
+  "imagine-video",
+  "usage",
+  "settings",
+  "marketplace",
+  "plugins",
+  "docs",
+  "changelog",
+  "doctor",
+]) {
+  assert.ok(builtinIds.includes(id), `missing built-in /${id}`);
+}
+assert.equal(slash.resolveSlash("/clear").action, "new");
+assert.equal(slash.resolveSlash("/status").action, "session-info");
+assert.equal(slash.resolveSlash("/undo").kind, "prompt");
+assert.match(slash.resolveSlash("/compact keep auth").text, /Preserve especially: keep auth/);
+assert.match(slash.resolveSlash("/recap").text, /recap of this session/i);
+assert.equal(slash.resolveSlash("/effort high").action, "effort");
+assert.equal(slash.resolveSlash("/effort high").arg, "high");
 slash.setRuntimeCommands(catalog);
 assert.deepEqual(
-  Array.from(slash.COMMANDS, (command) => command.id),
-  [
-    "imagine",
-    "imagine-video",
-    "usage",
-    "settings",
-    "marketplace",
-    "plugins",
-    "context-watch",
-    "work-analysis",
-  ],
+  Array.from(slash.COMMANDS, (command) => command.id).slice(-2),
+  ["context-watch", "work-analysis"],
 );
+assert.ok(slash.COMMANDS.every((command) => command.id !== "imagine" || command.kind !== "skill"));
 assert.deepEqual(
   Array.from(slash.menuForInput("/work", 5).items, (command) => command.id),
   ["work-analysis"],
@@ -101,4 +123,4 @@ assert.equal(slash.resolveSlash("/not-installed").kind, "passthrough");
 slash.setRuntimeCommands([]);
 assert.equal(slash.menuForInput("/work", 5), null);
 
-console.log("Slash command catalog OK: local skill discovery, filtering, invocation, fallback.");
+console.log("Slash command catalog OK: built-ins, aliases, local skill discovery, filtering, invocation, fallback.");

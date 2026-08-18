@@ -12,6 +12,9 @@ export interface GrokSessionSummary {
   updatedAt: string;
   messageCount: number;
   reasoningEffort?: string;
+  lastTurnSummary?: string;
+  lastRecap?: string;
+  titleIsManual?: boolean;
 }
 
 interface SummaryJson {
@@ -25,6 +28,10 @@ interface SummaryJson {
   num_messages?: number;
   current_model_id?: string;
   reasoning_effort?: string;
+  last_turn_summary?: string;
+  last_recap?: string;
+  title_is_manual?: boolean;
+  session_title?: string;
 }
 
 function normalizePath(value: string): string {
@@ -193,6 +200,11 @@ export async function listLocalSessions(options: {
             new Date(0).toISOString(),
           messageCount,
           ...(summary.reasoning_effort ? { reasoningEffort: summary.reasoning_effort } : {}),
+          ...(summary.last_turn_summary
+            ? { lastTurnSummary: truncateTitle(summary.last_turn_summary, 140) }
+            : {}),
+          ...(summary.last_recap ? { lastRecap: truncateTitle(summary.last_recap, 400) } : {}),
+          ...(summary.title_is_manual ? { titleIsManual: true } : {}),
         });
       } catch {
         // skip
@@ -301,6 +313,57 @@ export async function readSessionTranscript(options: {
   let start = out.length - limit;
   while (start > 0 && out[start]?.role !== "user") start -= 1;
   return out.slice(start);
+}
+
+/**
+ * Apply a manual session title (Grok CLI `/rename`). Automatic titling stays
+ * off until the user later runs `/rename --auto`.
+ */
+export async function updateLocalSessionTitle(options: {
+  sessionId: string;
+  title: string;
+  grokHome?: string;
+}): Promise<{ id: string; title: string; auto: boolean }> {
+  const sessionId = String(options.sessionId || "").trim();
+  if (!sessionId || /[\\/]/.test(sessionId) || sessionId === "." || sessionId === "..") {
+    throw new Error("Invalid session id.");
+  }
+  const auto = String(options.title || "").trim() === "--auto";
+  const title = auto ? "" : truncateTitle(String(options.title || "").trim(), 100);
+  if (!auto && !title) throw new Error("A session title is required.");
+
+  const sessionDir = await findSessionDirectory({
+    sessionId,
+    ...(options.grokHome ? { grokHome: options.grokHome } : {}),
+  });
+  if (!sessionDir) throw new Error("Session not found.");
+
+  const summaryPath = join(sessionDir, "summary.json");
+  const raw = await readFile(summaryPath, "utf8");
+  const summary = JSON.parse(raw) as SummaryJson;
+  const nextSummary: SummaryJson = {
+    ...summary,
+    ...(auto
+      ? { title_is_manual: false }
+      : {
+          generated_title: title,
+          session_title: title,
+          session_summary: title,
+          title_is_manual: true,
+        }),
+    updated_at: new Date().toISOString(),
+  };
+  if (auto) {
+    delete nextSummary.session_title;
+  }
+  await writeFile(summaryPath, `${JSON.stringify(nextSummary, null, 2)}\n`, "utf8");
+  return {
+    id: sessionId,
+    title: auto
+      ? truncateTitle(summary.generated_title || summary.session_summary || "Untitled chat")
+      : title,
+    auto,
+  };
 }
 
 /** Locate a session folder by id under ~/.grok/sessions/<cwd>/<id>. */

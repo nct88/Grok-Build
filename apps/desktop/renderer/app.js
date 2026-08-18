@@ -94,6 +94,11 @@
           items.push(it);
           return it;
         },
+        prepend(kind, text, meta) {
+          const it = { id: items.length + 1, kind, text, meta: meta || {} };
+          items.unshift(it);
+          return it;
+        },
         pushDelta() {
           return null;
         },
@@ -775,6 +780,69 @@
     convTitle.textContent = explicit || conversationHeading();
   }
 
+  /** Latest recap / last-turn summary for the open chat (Grok CLI 1.0.5). */
+  let activeSessionMeta = { lastRecap: "", lastTurnSummary: "", titleIsManual: false };
+
+  function applySessionRecap(meta) {
+    const recap = String(meta?.lastRecap || "").trim();
+    const lastTurn = String(meta?.lastTurnSummary || "").trim();
+    activeSessionMeta = {
+      lastRecap: recap,
+      lastTurnSummary: lastTurn,
+      titleIsManual: Boolean(meta?.titleIsManual),
+    };
+    if (!eventStore.prepend) {
+      paintSessionFlowStrip();
+      return;
+    }
+    eventStore.removeKind?.("recap");
+    if (recap || lastTurn) {
+      eventStore.prepend("recap", recap || lastTurn, {
+        lastTurnSummary: lastTurn,
+        open: false,
+      });
+    }
+    paintSessionFlowStrip();
+  }
+
+  function paintSessionFlowStrip() {
+    const el = $("sessionFlowStrip");
+    if (!el) return;
+    const effort = selEffort?.value || lastSessionInfo?.reasoningEffort || "";
+    const pct = lastSessionInfo?.context?.percent;
+    const lastTurn = activeSessionMeta.lastTurnSummary || lastSessionInfo?.lastTurnSummary || "";
+    const recap = activeSessionMeta.lastRecap || lastSessionInfo?.lastRecap || "";
+    const parts = [];
+    if (effort) parts.push(effort);
+    if (pct != null && Number.isFinite(Number(pct))) parts.push(`${Number(pct)}%`);
+    if (lastTurn) parts.push(lastTurn);
+    else if (recap) parts.push(recap);
+    const text = parts.filter(Boolean).join(" · ");
+    el.textContent = text;
+    el.title = recap || lastTurn || text;
+    el.hidden = !text;
+    el.classList.toggle("hidden", !text);
+  }
+
+  function rememberSessionMeta(session) {
+    if (!session || session.id !== activeSessionId) return;
+    activeSessionMeta = {
+      lastRecap: String(session.lastRecap || activeSessionMeta.lastRecap || "").trim(),
+      lastTurnSummary: String(session.lastTurnSummary || activeSessionMeta.lastTurnSummary || "").trim(),
+      titleIsManual: Boolean(session.titleIsManual),
+    };
+    if (
+      session.title &&
+      !session.titleIsManual &&
+      session.title !== convTitle?.textContent &&
+      !looksLikeSessionIdTitle(session)
+    ) {
+      sessionTabs?.updateActive?.({ title: session.title });
+      syncConvTitle(session.title);
+    }
+    paintSessionFlowStrip();
+  }
+
   async function newChatTab(viaAgent) {
     sessionTabs.saveSnapshot(eventStore.items);
     restoreStoreItems([]);
@@ -787,6 +855,8 @@
       items: [],
       skipPrevSnapshot: true,
     });
+    activeSessionMeta = { lastRecap: "", lastTurnSummary: "", titleIsManual: false };
+    paintSessionFlowStrip();
     syncConvTitle(title);
     if (viaAgent) {
       try {
@@ -3613,9 +3683,12 @@
       row.className =
         "project-chat-item" + (s.id === activeSessionId ? " active" : "");
       row.setAttribute("role", "treeitem");
-      row.title = s.title || "";
-      // Codex: chat title only (no msg count clutter)
-      row.innerHTML = `<span class="project-chat-title">${escapeHtml(s.title)}</span>`;
+      // Codex: chat title; 1.0.5 last-turn summary keeps the reasoning thread visible.
+      const summary = String(s.lastTurnSummary || s.lastRecap || "").trim();
+      row.innerHTML =
+        `<span class="project-chat-title">${escapeHtml(s.title)}</span>` +
+        (summary ? `<span class="project-chat-summary">${escapeHtml(summary)}</span>` : "");
+      row.title = [s.title, summary].filter(Boolean).join("\n");
       row.onclick = (ev) => {
         if (ev.target.closest("button")) return;
         void openHistorySession(s);
@@ -3683,8 +3756,11 @@
       row.className =
         "project-chat-item recents-chat-item" +
         (s.id === activeSessionId ? " active" : "");
-      row.innerHTML = `<span class="project-chat-title">${escapeHtml(s.title)}</span>`;
-      row.title = s.title || "";
+      const summary = String(s.lastTurnSummary || s.lastRecap || "").trim();
+      row.innerHTML =
+        `<span class="project-chat-title">${escapeHtml(s.title)}</span>` +
+        (summary ? `<span class="project-chat-summary">${escapeHtml(summary)}</span>` : "");
+      row.title = [s.title, summary].filter(Boolean).join("\n");
       row.onclick = (event) => {
         if (event.target.closest("button")) return;
         void openHistorySession(s);
@@ -3983,11 +4059,13 @@
       activeSessionId = s.id;
       convTitle.textContent = s.title || "Resumed conversation";
       await paintTranscript(s.id);
+      applySessionRecap(s);
       sessionTabs?.saveSnapshot?.(eventStore.items);
       const loadCwd = noProj ? getRecentsWorkspace() || "" : cwd;
       await api.loadSession(s.id, loadCwd, connectOpts());
       agentConnected = true;
       await paintTranscript(s.id);
+      applySessionRecap(s);
       sessionTabs?.updateActive?.({
         sessionId: s.id,
         title: s.title || "Chat",
@@ -4030,6 +4108,15 @@
       cachedSessionsByProject.clear();
       console.warn("refreshHistory", e);
     }
+    if (activeSessionId) {
+      const listed = [
+        ...cachedRecentsSessions,
+        ...[...cachedSessionsByProject.values()].flat(),
+      ];
+      const current = listed.find((session) => session.id === activeSessionId);
+      if (current) rememberSessionMeta(current);
+    }
+    paintSessionFlowStrip();
     // Nested chats under each project row
     renderProjects();
   }
@@ -4424,6 +4511,8 @@
       [tt("permissionMode", "Permission mode"), data.permissionMode],
       [tt("created", "Created"), data.createdAt ? new Date(data.createdAt).toLocaleString() : null],
       [tt("updated", "Updated"), data.updatedAt ? new Date(data.updatedAt).toLocaleString() : null],
+      [tt("lastTurnSummary", "Last turn"), data.lastTurnSummary],
+      [tt("lastRecap", "Last recap"), data.lastRecap],
     ];
     return rows.filter(([, value]) => value !== null && value !== undefined && value !== "");
   }
@@ -4473,6 +4562,14 @@
       const label = $("usageComposerLabel");
       if (label) label.textContent = pct == null ? tt("sessionInfo", "Session") : `${pctText}`;
     }
+    if (data?.lastRecap || data?.lastTurnSummary) {
+      activeSessionMeta = {
+        lastRecap: String(data.lastRecap || activeSessionMeta.lastRecap || "").trim(),
+        lastTurnSummary: String(data.lastTurnSummary || activeSessionMeta.lastTurnSummary || "").trim(),
+        titleIsManual: Boolean(data.titleIsManual || activeSessionMeta.titleIsManual),
+      };
+    }
+    paintSessionFlowStrip();
     window.GrokIcons?.applyAll?.($("menuUsage"));
   }
 
@@ -5377,7 +5474,7 @@
         void drainQueue();
         void refreshHistory();
         setTimeout(() => void refreshHistory(), 1600);
-        if (!$("menuUsage")?.classList.contains("hidden")) void refreshSessionInfo();
+        void refreshSessionInfo();
         break;
       }
       case "model_catalog":
@@ -5516,13 +5613,109 @@
     }
   }
 
-  function runSlashUiAction(action) {
+  function openSessionInfoPopover(tab) {
+    closeAllChipMenus?.();
+    const menu = $("menuUsage");
+    const btn = $("btnUsage");
+    if (menu) {
+      menu.classList.remove("hidden");
+      btn?.setAttribute("aria-expanded", "true");
+    }
+    activateSessionInfoTab(tab === "context" || tab === "account" ? tab : "session");
+    void refreshSessionInfo();
+    void refreshUsage();
+    return true;
+  }
+
+  function applySlashSelect(sel, value) {
+    if (!sel || value == null) return false;
+    const raw = String(value).trim();
+    if (!raw) return false;
+    const lower = raw.toLowerCase();
+    const match = [...sel.options].find((option) => {
+      const v = String(option.value || "").toLowerCase();
+      const label = String(option.textContent || "").toLowerCase();
+      return v === lower || label === lower || v.startsWith(lower) || label.includes(lower);
+    });
+    if (!match?.value) return false;
+    sel.value = match.value;
+    void onConfigChange(sel);
+    return true;
+  }
+
+  function lastAssistantText() {
+    const item = eventStore.findLast?.(
+      (it) => it.kind === "assistant" && String(it.text || "").trim(),
+    );
+    return item ? String(item.text || "").trim() : "";
+  }
+
+  async function copyLastAssistantReply() {
+    const text = lastAssistantText();
+    if (!text) {
+      addStep(tt("noReplyToCopy", "No assistant reply to copy yet."));
+      return true;
+    }
+    if (api.writeClipboardText) await api.writeClipboardText(text);
+    addStep(tt("copiedReply", "Copied last reply"));
+    return true;
+  }
+
+  async function exportActiveChat() {
+    if (!activeSessionId) return false;
+    const mdText = await api.exportSession(activeSessionId);
+    await api.saveExport(mdText, `${String(activeSessionId).slice(0, 8)}.md`);
+    addStep("Session exported");
+    return true;
+  }
+
+  async function renameActiveChat(arg) {
+    if (!activeSessionId || !api.renameSession) return false;
+    const requested = String(arg || "").trim();
+    const title =
+      requested ||
+      window.prompt(tt("renamePrompt", "New chat title"), convTitle?.textContent || "");
+    if (!title) {
+      addStep(tt("renameNeedTitle", "Type /rename <title> or /rename --auto"));
+      return true;
+    }
+    const res = await api.renameSession(activeSessionId, title);
+    const next = res?.title || title;
+    sessionTabs?.updateActive?.({ title: next });
+    syncConvTitle(next);
+    void refreshHistory();
+    addStep(`/rename ${res?.auto ? "--auto" : next}`);
+    return true;
+  }
+
+  async function deleteActiveChat() {
+    if (!activeSessionId) return false;
+    const title = convTitle?.textContent || activeSessionId;
+    if (!confirm(`Delete session ${title}?`)) return true;
+    await api.deleteSession(activeSessionId);
+    addStep(tt("deletedChat", "Chat deleted"));
+    await newChatTab(true);
+    void refreshHistory();
+    return true;
+  }
+
+  function runSlashUiAction(action, arg) {
+    if (action === "new") {
+      $("btnNew")?.click();
+      return true;
+    }
+    if (action === "session-info") return openSessionInfoPopover("session");
+    if (action === "context") return openSessionInfoPopover("context");
+    if (action === "usage") {
+      openSettings("usage");
+      return true;
+    }
     if (action === "settings") {
       openSettings("general");
       return true;
     }
-    if (action === "usage") {
-      openSettings("usage");
+    if (action === "privacy") {
+      openSettings("account");
       return true;
     }
     if (action === "marketplace") {
@@ -5532,10 +5725,74 @@
       void refreshMarketplaceCatalog?.();
       return true;
     }
-    if (action === "plugins") {
+    if (action === "plugins" || action === "skills") {
       setPanelVisible(true);
       switchPanel("tools");
       switchToolsTab("plugins");
+      return true;
+    }
+    if (action === "mcps") {
+      setPanelVisible(true);
+      switchPanel("tools");
+      switchToolsTab("mcp");
+      return true;
+    }
+    if (action === "copy") {
+      void copyLastAssistantReply();
+      return true;
+    }
+    if (action === "export") {
+      void exportActiveChat();
+      return true;
+    }
+    if (action === "rename") {
+      void renameActiveChat(arg);
+      return true;
+    }
+    if (action === "delete") {
+      void deleteActiveChat();
+      return true;
+    }
+    if (action === "model") {
+      if (!applySlashSelect(selModel, arg)) $("btnModel")?.click();
+      return true;
+    }
+    if (action === "effort") {
+      if (!applySlashSelect(selEffort, arg)) $("btnEffort")?.click();
+      return true;
+    }
+    if (action === "plan") {
+      setPermissionValue("plan");
+      return true;
+    }
+    if (action === "always-approve") {
+      setPermissionValue("bypassPermissions");
+      return true;
+    }
+    if (action === "auto") {
+      setPermissionValue("auto");
+      return true;
+    }
+    if (action === "login") {
+      void doLogin?.();
+      return true;
+    }
+    if (action === "logout") {
+      void doLogout?.();
+      return true;
+    }
+    if (action === "docs") {
+      void api.openExternal?.("https://docs.x.ai/build/overview");
+      addStep(tt("docsOpened", "Opened Grok Build docs"));
+      return true;
+    }
+    if (action === "changelog") {
+      void api.openExternal?.("https://x.ai/build/changelog");
+      addStep(tt("changelogOpened", "Opened Grok Build changelog"));
+      return true;
+    }
+    if (action === "doctor") {
+      void runCli(["doctor"]);
       return true;
     }
     return false;
@@ -5568,7 +5825,7 @@
       if (resolved.kind === "ui") {
         prompt.value = "";
         autoSize();
-        runSlashUiAction(resolved.action);
+        runSlashUiAction(resolved.action, resolved.arg);
         return;
       }
       if (resolved.kind === "prompt") {

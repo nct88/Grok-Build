@@ -42,6 +42,7 @@ const INVOKE_CHANNELS = [
   "agent:listSessions",
   "agent:loadSession",
   "agent:deleteSession",
+  "agent:renameSession",
   "agent:runCli",
   "plugin:catalog",
   "agent:readTranscript",

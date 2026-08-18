@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
+import { sessionRequestMeta } from "./sessionMeta.js";
 import { normalizeConfigOptions, normalizeSessionUpdate } from "./sessionUpdates.js";
 import type {
   ConnectionState,
@@ -170,6 +171,10 @@ export class GrokClient {
     }
   }
 
+  setReasoningEffort(effort?: string | null): void {
+    this.options.reasoningEffort = effort ? String(effort) : "";
+  }
+
   async newSession(): Promise<void> {
     const connection = this.requireConnection();
     if (this.state === "running") {
@@ -182,6 +187,7 @@ export class GrokClient {
         ...(this.options.additionalDirectories?.length
           ? { additionalDirectories: this.options.additionalDirectories }
           : {}),
+        ...this.sessionOpenFields(),
       }),
       "session/new",
     );
@@ -221,6 +227,7 @@ export class GrokClient {
         ...(this.options.additionalDirectories?.length
           ? { additionalDirectories: this.options.additionalDirectories }
           : {}),
+        ...this.sessionOpenFields(),
       }),
       "session/load",
     );
@@ -428,6 +435,14 @@ export class GrokClient {
       child.kill("SIGKILL");
     }
     this.process = undefined;
+  }
+
+  /** Grok CLI 1.0.5+ reads reasoning effort from session/new and session/load `_meta`. */
+  private sessionOpenFields(): { _meta?: Record<string, unknown> } {
+    const meta = sessionRequestMeta({
+      reasoningEffort: this.options.reasoningEffort,
+    });
+    return meta ? { _meta: meta } : {};
   }
 
   private requireConnection(): acp.ClientSideConnection {

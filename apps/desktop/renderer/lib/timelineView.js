@@ -18,6 +18,7 @@
     tool_group: 52,
     permission: 88,
     activity: 32,
+    recap: 72,
   };
 
   /**
@@ -62,9 +63,31 @@
       return status || "";
     }
 
-    function localizedToolTitle(value) {
+    function localizedToolTitle(value, status) {
       const title = String(value || "").trim();
+      const running = status === "running" || status === "pending";
+      if (running) {
+        const prepared = preparingToolLabel(title);
+        if (prepared) return prepared;
+      }
       return !title || /^(?:tool|tools)$/i.test(title) ? t("labelTools", "Tools") : title;
+    }
+
+    /** Grok CLI 1.0.5 preparing spinner: readable labels while arguments arrive. */
+    function preparingToolLabel(title) {
+      const raw = String(title || "").trim();
+      if (!raw) return t("preparingWriteFile", "Writing file…");
+      if (/^(?:mcp__|user-)/i.test(raw) && !/\s/.test(raw)) {
+        const short = raw.replace(/^(?:mcp__|user-)/i, "").replace(/[_-]+/g, " ");
+        return t("preparingNamedTool", "Preparing {name}…").replace("{name}", short || raw);
+      }
+      if (/^edit\b|search_replace|str_replace/i.test(raw)) return t("preparingWriteEdit", "Writing edit…");
+      if (/^write\b|^create\b/i.test(raw)) return t("preparingWriteFile", "Writing file…");
+      if (/^read\b|^read_file\b/i.test(raw)) return t("preparingReadFile", "Reading file…");
+      if (/grep|search|glob|web_search|web_fetch/i.test(raw)) return t("preparingSearch", "Searching…");
+      if (/list_dir|listdir|list directory/i.test(raw)) return t("preparingListDir", "Listing directory…");
+      if (/bash|shell|terminal|run_terminal/i.test(raw)) return t("preparingCommand", "Running command…");
+      return "";
     }
 
     function toolGroupPreview(tools) {
@@ -754,6 +777,21 @@
         d.hidden = true;
         return d;
       }
+      if (item.kind === "recap") {
+        const d = document.createElement("details");
+        d.className = "cli-recap tl-item";
+        d.open = Boolean(item.meta?.open);
+        d.dataset.itemId = String(item.id);
+        const lastTurn = String(item.meta?.lastTurnSummary || "").trim();
+        d.innerHTML = `<summary class="cli-line">
+          <span class="cli-mark" aria-hidden="true">▣</span>
+          <span class="cli-line-title"></span>
+        </summary><div class="cli-recap-body body"></div>`;
+        d.querySelector(".cli-line-title").textContent =
+          lastTurn || t("sessionRecap", "Session recap");
+        d.querySelector(".body").textContent = item.text || lastTurn || "";
+        return d;
+      }
       if (item.kind === "thought") {
         // CLI: "◆ Thought for 1.8s" — expand to read stream
         const d = document.createElement("details");
@@ -799,7 +837,7 @@
         d.open = Boolean(item.meta?.open) || running;
         d.dataset.itemId = String(item.id);
         d.dataset.status = status;
-        const title = localizedToolTitle(item.text || item.meta?.title);
+        const title = localizedToolTitle(item.text || item.meta?.title, status);
         d.innerHTML = `<summary class="cli-line">
           <span class="cli-mark${running ? " spin-dot" : ""}" aria-hidden="true">${running ? "◆" : "◇"}</span>
           <span class="cli-line-title"></span>

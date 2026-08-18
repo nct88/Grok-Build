@@ -8,7 +8,7 @@ Grok Build is an Electron **agent desktop** powered by the **official Grok CLI**
 
 > **CLI is the core · Desktop is the interface.** Grok Build is not a reskinned VS Code and does not implement a second agent runtime.
 
-Current source version: **0.5.37** — see [`product/VERSION`](product/VERSION).
+Current source version: **0.5.38** — see [`product/VERSION`](product/VERSION).
 
 ## Downloads
 
@@ -16,12 +16,12 @@ The release is publicly available on GitHub Releases:
 
 | Package | Purpose | Download |
 |---|---|---|
-| NSIS Setup | Install on Windows with Start Menu and shortcut integration | [Grok-Build-Setup-0.5.37.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.37/Grok-Build-Setup-0.5.37.exe) |
-| Portable EXE | Run as a self-extracting executable | [Grok-Build-0.5.37-win32-x64-portable.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.37/Grok-Build-0.5.37-win32-x64-portable.exe) |
-| Portable ZIP | Extract once; recommended for regular use | [Grok-Build-0.5.37-win32-x64.zip](https://github.com/nct88/Grok-Build/releases/download/v0.5.37/Grok-Build-0.5.37-win32-x64.zip) |
-| Manifest | Artifact sizes and SHA-256 values | [MANIFEST.json](https://github.com/nct88/Grok-Build/releases/download/v0.5.37/MANIFEST.json) |
+| NSIS Setup | Install on Windows with Start Menu and shortcut integration | [Grok-Build-Setup-0.5.38.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/Grok-Build-Setup-0.5.38.exe) |
+| Portable EXE | Run as a self-extracting executable | [Grok-Build-0.5.38-win32-x64-portable.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/Grok-Build-0.5.38-win32-x64-portable.exe) |
+| Portable ZIP | Extract once; recommended for regular use | [Grok-Build-0.5.38-win32-x64.zip](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/Grok-Build-0.5.38-win32-x64.zip) |
+| Manifest | Artifact sizes and SHA-256 values | [MANIFEST.json](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/MANIFEST.json) |
 
-Release page: [Grok Build v0.5.37](https://github.com/nct88/Grok-Build/releases/tag/v0.5.37).
+Release page: [Grok Build v0.5.38](https://github.com/nct88/Grok-Build/releases/tag/v0.5.38).
 
 Windows artifacts are currently unsigned and may trigger SmartScreen on first run. Verify their SHA-256 values against `MANIFEST.json` before opening them.
 
@@ -48,6 +48,8 @@ Grok Build Desktop (Electron)
 - Streams responses with Markdown, thinking, plans and tool state.
 - Groups tool calls while keeping the final answer below tool activity.
 - Select model, reasoning effort, mode and permission policy directly in the composer.
+- Common Grok CLI slash commands (`/new`, `/session-info`, `/context`, `/compact`, `/recap`, `/rewind`, `/model`, `/effort`, `/plan`, `/btw`, `/docs`) run from the composer.
+- Resume shows recap and last-turn summaries; ACP sends reasoning effort when opening or loading a session (CLI 1.0.5).
 - Cancel an active turn or queue the next prompt while the agent is busy.
 - `AgentSupervisor` keeps warm connections, reconnects automatically and supports up to two interactive slots.
 
@@ -107,7 +109,7 @@ Grok CLI lookup order:
 
 ### Option 1: NSIS Setup
 
-1. Download `Grok-Build-Setup-0.5.37.exe` from the release.
+1. Download `Grok-Build-Setup-0.5.38.exe` from the release.
 2. Verify its checksum in `MANIFEST.json`.
 3. Run the installer and open **Grok Build** from the Start Menu.
 4. Select a project or start a conversation without one.

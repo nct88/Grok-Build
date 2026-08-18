@@ -90,8 +90,22 @@ try {
     };
   });
   if (darkSmall.hidden) failures.push("full slash menu is hidden");
-  if (darkSmall.labels.length !== 12) failures.push(`expected 12 commands, got ${darkSmall.labels.length}`);
-  for (const id of ["context-watch", "keep-request-scope", "quota-handover", "work-analysis", "write-fix-log"]) {
+  const expectedCount = await page.evaluate(() => globalThis.GrokSlashCommands.COMMANDS.length);
+  if (darkSmall.labels.length !== expectedCount) {
+    failures.push(`expected ${expectedCount} commands, got ${darkSmall.labels.length}`);
+  }
+  for (const id of [
+    "new",
+    "session-info",
+    "context",
+    "compact",
+    "recap",
+    "context-watch",
+    "keep-request-scope",
+    "quota-handover",
+    "work-analysis",
+    "write-fix-log",
+  ]) {
     if (!darkSmall.labels.includes(`/${id}`)) failures.push(`missing /${id}`);
   }
   if (darkSmall.menuHeight > 222) failures.push(`menu exceeds max height: ${darkSmall.menuHeight}`);

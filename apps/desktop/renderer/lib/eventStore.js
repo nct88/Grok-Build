@@ -6,7 +6,7 @@
   let seq = 1;
 
   /**
-   * @typedef {"user"|"assistant"|"thought"|"step"|"error"|"review"|"foot"|"empty"|"activity"|"tool"|"tool_group"|"permission"} ItemKind
+   * @typedef {"user"|"assistant"|"thought"|"step"|"error"|"review"|"foot"|"empty"|"activity"|"tool"|"tool_group"|"permission"|"recap"} ItemKind
    * @typedef {{ id: number, kind: ItemKind, text: string, meta: Record<string, unknown>, ts: number, streaming?: boolean }} StoreItem
    */
 
@@ -80,6 +80,38 @@
         items.push(item);
         emit({ type: "append", item });
         return item;
+      },
+
+      /**
+       * Insert at the start (session recap / last-turn summary on resume).
+       * @param {ItemKind} kind
+       * @param {string} [text]
+       * @param {Record<string, unknown>} [meta]
+       */
+      prepend(kind, text, meta) {
+        /** @type {StoreItem} */
+        const item = {
+          id: seq++,
+          kind,
+          text: text == null ? "" : String(text),
+          meta: meta || {},
+          ts: Date.now(),
+          streaming: false,
+        };
+        items.unshift(item);
+        emit({ type: "reset" });
+        return item;
+      },
+
+      removeKind(kind) {
+        let changed = false;
+        for (let i = items.length - 1; i >= 0; i--) {
+          if (items[i].kind === kind) {
+            items.splice(i, 1);
+            changed = true;
+          }
+        }
+        if (changed) emit({ type: "reset" });
       },
 
       /**
@@ -203,18 +235,6 @@
           if (pred(items[i])) return items[i];
         }
         return null;
-      },
-
-      /** Remove items matching kind (e.g. empty hero). */
-      removeKind(kind) {
-        let changed = false;
-        for (let i = items.length - 1; i >= 0; i--) {
-          if (items[i].kind === kind) {
-            items.splice(i, 1);
-            changed = true;
-          }
-        }
-        if (changed) emit({ type: "reset" });
       },
 
       /**

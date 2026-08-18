@@ -26,8 +26,139 @@
     return "";
   }
 
-  /** @type {{ id: string, label: string, hint?: string, description?: string, insert: string, kind?: string, expand?: ((arg: string, ctx?: SlashContext) => string)|null }[]} */
+  /**
+   * @typedef {{
+   *   id: string,
+   *   label: string,
+   *   hint?: string,
+   *   description?: string,
+   *   insert: string,
+   *   kind?: string,
+   *   aliases?: string[],
+   *   expand?: ((arg: string, ctx?: SlashContext) => string)|null
+   * }} SlashCommand
+   */
+
+  /** @type {SlashCommand[]} */
   const BUILTIN_COMMANDS = [
+    { id: "new", label: "/new", hint: "Start a fresh chat", insert: "/new", aliases: ["clear"], expand: null },
+    {
+      id: "session-info",
+      label: "/session-info",
+      hint: "Session, context and account",
+      insert: "/session-info",
+      aliases: ["status", "info"],
+      expand: null,
+    },
+    { id: "context", label: "/context", hint: "Show context-window use", insert: "/context", expand: null },
+    {
+      id: "compact",
+      label: "/compact",
+      hint: "Compress history to free context",
+      insert: "/compact ",
+      expand: (arg) => {
+        const note = String(arg || "").trim();
+        return (
+          "Compact this conversation to reclaim context-window space. " +
+          "Keep the project goal, current files, unresolved decisions and the last useful turn. " +
+          (note ? `Preserve especially: ${note}` : "Drop stale exploration that is no longer needed.")
+        );
+      },
+    },
+    {
+      id: "recap",
+      label: "/recap",
+      hint: "Summarize this session",
+      insert: "/recap",
+      aliases: ["summarize"],
+      expand: (arg) => {
+        const note = String(arg || "").trim();
+        return (
+          "Write an on-demand recap of this session in the same language as the conversation. " +
+          "Cover: what we decided, the current project context, remaining work, and the last turn's outcome. " +
+          "Keep it short enough to restore reasoning later. " +
+          (note ? `Focus: ${note}` : "")
+        );
+      },
+    },
+    {
+      id: "rewind",
+      label: "/rewind",
+      hint: "Undo later turns (history only)",
+      insert: "/rewind",
+      aliases: ["undo"],
+      expand: (arg) => {
+        const note = String(arg || "").trim();
+        return (
+          "Rewind this conversation to an earlier user turn. " +
+          "Truncate conversation history only — do not revert files on disk. " +
+          "Ask which turn to keep if I did not name one. " +
+          (note ? `Target: ${note}` : "")
+        );
+      },
+    },
+    { id: "copy", label: "/copy", hint: "Copy the last reply", insert: "/copy", expand: null },
+    { id: "export", label: "/export", hint: "Export this chat", insert: "/export", expand: null },
+    {
+      id: "rename",
+      label: "/rename",
+      hint: "Rename this chat",
+      insert: "/rename ",
+      aliases: ["title"],
+      expand: null,
+    },
+    { id: "delete", label: "/delete", hint: "Delete this chat", insert: "/delete", expand: null },
+    { id: "model", label: "/model", hint: "Switch model", insert: "/model ", aliases: ["m"], expand: null },
+    { id: "effort", label: "/effort", hint: "Set reasoning effort", insert: "/effort ", expand: null },
+    { id: "plan", label: "/plan", hint: "Switch to plan mode", insert: "/plan", expand: null },
+    {
+      id: "always-approve",
+      label: "/always-approve",
+      hint: "Skip permission prompts",
+      insert: "/always-approve",
+      expand: null,
+    },
+    { id: "auto", label: "/auto", hint: "Auto-approve safe tools", insert: "/auto", expand: null },
+    {
+      id: "btw",
+      label: "/btw",
+      hint: "Side question without derailing",
+      insert: "/btw ",
+      expand: (arg) => {
+        const q = String(arg || "").trim();
+        return (
+          "This is a side question. Do not abandon the current task. " +
+          "Answer briefly, then continue the main work. " +
+          (q ? `Question: ${q}` : "Ask me what the aside is if I did not specify one.")
+        );
+      },
+    },
+    {
+      id: "remember",
+      label: "/remember",
+      hint: "Save a note to memory",
+      insert: "/remember ",
+      expand: (arg) => {
+        const note = String(arg || "").trim();
+        return note
+          ? `Save this to memory now, without waiting for an automatic summary:\n${note}`
+          : "Ask me what to remember, then save it to memory immediately.";
+      },
+    },
+    {
+      id: "feedback",
+      label: "/feedback",
+      hint: "Report a Desktop issue",
+      insert: "/feedback ",
+      expand: (arg) => {
+        const note = String(arg || "").trim();
+        return (
+          "Collect product feedback about Grok Build Desktop. " +
+          "Summarize the issue clearly and suggest the next check. " +
+          (note ? `Report: ${note}` : "Ask me what went wrong.")
+        );
+      },
+    },
     {
       id: "imagine",
       label: "/imagine",
@@ -84,34 +215,25 @@
         );
       },
     },
+    { id: "usage", label: "/usage", hint: "Open usage in Settings", insert: "/usage", aliases: ["cost"], expand: null },
+    { id: "settings", label: "/settings", hint: "Open Settings", insert: "/settings", aliases: ["config", "preferences", "prefs"], expand: null },
+    { id: "marketplace", label: "/marketplace", hint: "Open plugin marketplace", insert: "/marketplace", expand: null },
+    { id: "plugins", label: "/plugins", hint: "Open plugins panel", insert: "/plugins", expand: null },
+    { id: "skills", label: "/skills", hint: "Open skills panel", insert: "/skills", expand: null },
+    { id: "mcps", label: "/mcps", hint: "Open MCP servers", insert: "/mcps", expand: null },
+    { id: "privacy", label: "/privacy", hint: "Coding data retention", insert: "/privacy", expand: null },
+    { id: "login", label: "/login", hint: "Sign in to Grok", insert: "/login", expand: null },
+    { id: "logout", label: "/logout", hint: "Sign out", insert: "/logout", expand: null },
+    { id: "docs", label: "/docs", hint: "Open Grok Build docs", insert: "/docs", aliases: ["howto", "guides"], expand: null },
     {
-      id: "usage",
-      label: "/usage",
-      hint: "Open usage in Settings",
-      insert: "/usage",
-      expand: null, // handled by UI
-    },
-    {
-      id: "settings",
-      label: "/settings",
-      hint: "Open Settings",
-      insert: "/settings",
+      id: "changelog",
+      label: "/changelog",
+      hint: "Open CLI release notes",
+      insert: "/changelog",
+      aliases: ["release-notes"],
       expand: null,
     },
-    {
-      id: "marketplace",
-      label: "/marketplace",
-      hint: "Open plugin marketplace",
-      insert: "/marketplace",
-      expand: null,
-    },
-    {
-      id: "plugins",
-      label: "/plugins",
-      hint: "Open plugins panel",
-      insert: "/plugins",
-      expand: null,
-    },
+    { id: "doctor", label: "/doctor", hint: "Run grok doctor", insert: "/doctor", expand: null },
   ];
   const COMMANDS = [...BUILTIN_COMMANDS];
 
@@ -121,14 +243,42 @@
     return `Use the ${id} skill and follow it.\nUser request: ${request}`;
   }
 
+  function commandAliases(command) {
+    return (command?.aliases || []).map((alias) => String(alias).toLowerCase());
+  }
+
+  function builtinNameSet() {
+    const names = new Set();
+    for (const command of BUILTIN_COMMANDS) {
+      names.add(command.id);
+      for (const alias of commandAliases(command)) names.add(alias);
+    }
+    return names;
+  }
+
+  function findCommand(id) {
+    const key = String(id || "").trim().toLowerCase();
+    if (!key) return null;
+    return (
+      COMMANDS.find((command) => command.id === key || commandAliases(command).includes(key)) ||
+      null
+    );
+  }
+
+  function commandMatchesQuery(command, query) {
+    if (!query) return true;
+    if (command.id.startsWith(query) || command.label.slice(1).startsWith(query)) return true;
+    return commandAliases(command).some((alias) => alias.startsWith(query));
+  }
+
   /** Replace commands discovered from the active workspace/profile. */
   function setRuntimeCommands(items) {
-    const builtinIds = new Set(BUILTIN_COMMANDS.map((command) => command.id));
+    const reserved = builtinNameSet();
     const seen = new Set();
     const runtime = [];
     for (const item of Array.isArray(items) ? items : []) {
       const id = String(item?.id || "").trim().toLowerCase();
-      if (!/^[a-z][a-z0-9_-]{0,63}$/.test(id) || builtinIds.has(id) || seen.has(id)) continue;
+      if (!/^[a-z][a-z0-9_-]{0,63}$/.test(id) || reserved.has(id) || seen.has(id)) continue;
       if (item?.kind !== "skill") continue;
       seen.add(id);
       runtime.push({
@@ -167,10 +317,10 @@
   function resolveSlash(text, ctx) {
     const parsed = parseLeadingSlash(text);
     if (!parsed) return { kind: "passthrough", text: String(text || "") };
-    const cmd = COMMANDS.find((c) => c.id === parsed.id);
+    const cmd = findCommand(parsed.id);
     if (!cmd) return { kind: "passthrough", text: String(text || "") };
     if (!cmd.expand) {
-      return { kind: "ui", action: cmd.id };
+      return { kind: "ui", action: cmd.id, arg: parsed.arg };
     }
     return {
       kind: "prompt",
@@ -195,9 +345,7 @@
     const m = before.match(/^\/([\w-]*)$/);
     if (!m) return null; // after space, hide menu (user is typing args)
     const q = m[1].toLowerCase();
-    const items = COMMANDS.filter(
-      (c) => !q || c.id.startsWith(q) || c.label.slice(1).startsWith(q),
-    );
+    const items = COMMANDS.filter((c) => commandMatchesQuery(c, q));
     if (!items.length) return null;
     return { query: q, start: 0, end: pos, items };
   }
@@ -288,6 +436,7 @@
     setRuntimeCommands,
     skillPrompt,
     parseLeadingSlash,
+    findCommand,
     resolveSlash,
     menuForInput,
     extractMediaRefs,

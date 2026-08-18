@@ -2,6 +2,14 @@
 
 Public, versioned changes for Grok Build Desktop.
 
+## 0.5.38 — 2026-08-18
+
+- Aligned Desktop with Grok CLI 1.0.5: ACP `session/new` and `session/load` now send reasoning effort, and resume surfaces last-turn / recap summaries.
+- Added common TUI slash commands to the composer (`/new`, `/session-info`, `/context`, `/compact`, `/recap`, `/rewind`, `/model`, `/effort`, `/plan`, `/btw`, `/docs`, and related aliases).
+- Improved session reasoning context with a header flow strip, sidebar last-turn previews, early title refresh, and readable preparing-tool labels.
+
+Release details are maintained in `docs/releases/0.5.38.md`.
+
 ## 0.5.37 — 2026-08-17
 
 - Added workspace/profile Grok skills to the Desktop slash menu through the local `grok inspect` catalog.

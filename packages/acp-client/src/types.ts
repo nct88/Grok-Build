@@ -234,5 +234,7 @@ export interface GrokClientOptions {
   requestTimeoutMs?: number;
   enableTerminal?: boolean;
   resumeSessionId?: string;
+  /** Applied on session/new and session/load (Grok CLI 1.0.5+). */
+  reasoningEffort?: string;
   mcpServers?: acp.McpServer[];
 }

@@ -1,5 +1,10 @@
 export { GrokClient } from "./grokClient.js";
 export { normalizeConfigOptions, normalizeSessionUpdate } from "./sessionUpdates.js";
+export {
+  REASONING_EFFORT_VALUES,
+  normalizeReasoningEffort,
+  sessionRequestMeta,
+} from "./sessionMeta.js";
 export type {
   ConnectionState,
   GrokClientOptions,

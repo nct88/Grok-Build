@@ -1038,6 +1038,9 @@ function readPackageSessionInfo() {
     agentName: summary?.agent_name || "Grok Build",
     createdAt: summary?.created_at || null,
     updatedAt: summary?.updated_at || null,
+    lastTurnSummary: summary?.last_turn_summary || null,
+    lastRecap: summary?.last_recap || null,
+    titleIsManual: Boolean(summary?.title_is_manual),
     context: {
       used: contextUsed,
       size: contextSize,
@@ -2314,6 +2317,7 @@ app.whenReady().then(() => {
   ipcMain.handle("agent:newSession", async () => {
     const client = getClient();
     if (!client) throw new Error("Not connected.");
+    client.setReasoningEffort?.(getConnectOptions()?.effort);
     await client.newSession();
     return { ok: true, sessionId: client.sessionId };
   });
@@ -2362,7 +2366,12 @@ app.whenReady().then(() => {
     await connectAgent(root, { ...(options || {}), resumeSessionId: sessionId });
     try {
       const client = getClient();
-      if (client) await client.loadSession(String(sessionId));
+      if (client) {
+        client.setReasoningEffort?.(
+          options?.effort || getConnectOptions()?.effort,
+        );
+        await client.loadSession(String(sessionId));
+      }
     } catch {
       // resume via --resume on connect may already have loaded
     }
@@ -2832,6 +2841,17 @@ app.whenReady().then(() => {
       throw new Error(result.stderr.trim() || "export failed");
     }
     return result.stdout;
+  });
+
+  ipcMain.handle("agent:renameSession", async (_e, sessionId, title) => {
+    const id = String(sessionId || "").trim();
+    if (!id) throw new Error("Session id is required.");
+    const mod = await loadSessions();
+    return mod.updateLocalSessionTitle({
+      sessionId: id,
+      title: String(title || ""),
+      grokHome: grokEnv().GROK_HOME,
+    });
   });
 
   ipcMain.handle("agent:deleteSession", async (_e, sessionId) => {

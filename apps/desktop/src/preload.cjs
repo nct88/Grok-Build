@@ -50,6 +50,8 @@ contextBridge.exposeInMainWorld("grokBuild", {
   loadSession: (sessionId, workspaceRoot, options) =>
     ipcRenderer.invoke("agent:loadSession", sessionId, workspaceRoot, options || {}),
   deleteSession: (sessionId) => ipcRenderer.invoke("agent:deleteSession", sessionId),
+  renameSession: (sessionId, title) =>
+    ipcRenderer.invoke("agent:renameSession", sessionId, title ?? ""),
   runCli: (args) => ipcRenderer.invoke("agent:runCli", args),
   pluginCatalog: () => ipcRenderer.invoke("plugin:catalog"),
   readTranscript: (sessionId) => ipcRenderer.invoke("agent:readTranscript", sessionId),

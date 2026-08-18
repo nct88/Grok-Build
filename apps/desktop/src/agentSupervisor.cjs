@@ -230,6 +230,7 @@ class AgentSupervisor {
     ) {
       if (resumeId) {
         try {
+          slot.client.setReasoningEffort?.(opts.effort);
           await slot.client.loadSession(resumeId);
           slot.connectOptions = { ...slot.connectOptions, ...opts };
           return { ok: true, reused: true, sessionId: slot.client.sessionId, slotId: slot.id };
@@ -274,6 +275,9 @@ class AgentSupervisor {
         arguments: buildLaunchArgs(slot.connectOptions),
         environment: this.deps.grokEnv(),
         enableTerminal: true,
+        ...(slot.connectOptions.effort
+          ? { reasoningEffort: String(slot.connectOptions.effort) }
+          : {}),
         ...(slot.connectOptions.resumeSessionId
           ? { resumeSessionId: slot.connectOptions.resumeSessionId }
           : {}),

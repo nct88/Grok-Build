@@ -8,7 +8,7 @@ Grok Build là ứng dụng **agent desktop** chạy trên Electron, sử dụng
 
 > **CLI là lõi · Desktop là giao diện.** Grok Build không phải bản đổi giao diện của VS Code và không triển khai một agent runtime thứ hai.
 
-Phiên bản source hiện tại: **0.5.37** — xem [`product/VERSION`](product/VERSION).
+Phiên bản source hiện tại: **0.5.38** — xem [`product/VERSION`](product/VERSION).
 
 ## Tải xuống
 
@@ -16,12 +16,12 @@ Release được phát hành công khai tại GitHub Releases:
 
 | Gói | Mục đích | Tải xuống |
 |---|---|---|
-| NSIS Setup | Cài vào Windows, tạo Start Menu/shortcut | [Grok-Build-Setup-0.5.37.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.37/Grok-Build-Setup-0.5.37.exe) |
-| Portable EXE | Chạy dạng file tự giải nén | [Grok-Build-0.5.37-win32-x64-portable.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.37/Grok-Build-0.5.37-win32-x64-portable.exe) |
-| Portable ZIP | Giải nén một lần, phù hợp dùng lâu dài | [Grok-Build-0.5.37-win32-x64.zip](https://github.com/nct88/Grok-Build/releases/download/v0.5.37/Grok-Build-0.5.37-win32-x64.zip) |
-| Manifest | Kích thước và SHA-256 của artifact | [MANIFEST.json](https://github.com/nct88/Grok-Build/releases/download/v0.5.37/MANIFEST.json) |
+| NSIS Setup | Cài vào Windows, tạo Start Menu/shortcut | [Grok-Build-Setup-0.5.38.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/Grok-Build-Setup-0.5.38.exe) |
+| Portable EXE | Chạy dạng file tự giải nén | [Grok-Build-0.5.38-win32-x64-portable.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/Grok-Build-0.5.38-win32-x64-portable.exe) |
+| Portable ZIP | Giải nén một lần, phù hợp dùng lâu dài | [Grok-Build-0.5.38-win32-x64.zip](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/Grok-Build-0.5.38-win32-x64.zip) |
+| Manifest | Kích thước và SHA-256 của artifact | [MANIFEST.json](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/MANIFEST.json) |
 
-Trang phát hành: [Grok Build v0.5.37](https://github.com/nct88/Grok-Build/releases/tag/v0.5.37).
+Trang phát hành: [Grok Build v0.5.38](https://github.com/nct88/Grok-Build/releases/tag/v0.5.38).
 
 Các file Windows hiện chưa được ký Authenticode. SmartScreen có thể cảnh báo trong lần chạy đầu; hãy kiểm tra SHA-256 trong `MANIFEST.json` trước khi mở file.
 
@@ -48,6 +48,8 @@ Grok Build Desktop (Electron)
 - Hiển thị nội dung trả lời theo luồng, Markdown, thinking, plan và trạng thái công cụ.
 - Gom các lời gọi công cụ thành nhóm; câu trả lời cuối được hiển thị phía dưới hoạt động công cụ.
 - Chọn model, reasoning effort, mode và chính sách quyền ngay tại composer.
+- Lệnh `/` phổ biến của Grok CLI (`/new`, `/session-info`, `/context`, `/compact`, `/recap`, `/rewind`, `/model`, `/effort`, `/plan`, `/btw`, `/docs`) chạy ngay trong composer.
+- Resume hiện recap và tóm tắt lượt gần nhất; ACP gửi reasoning effort khi mở hoặc tải phiên (CLI 1.0.5).
 - Hỗ trợ hủy lượt chạy và xếp hàng prompt tiếp theo khi agent đang bận.
 - `AgentSupervisor` giữ kết nối ấm, tự kết nối lại và hỗ trợ tối đa hai slot tương tác.
 
@@ -107,7 +109,7 @@ Thứ tự tìm Grok CLI:
 
 ### Cách 1: NSIS Setup
 
-1. Tải `Grok-Build-Setup-0.5.37.exe` từ release.
+1. Tải `Grok-Build-Setup-0.5.38.exe` từ release.
 2. Kiểm tra checksum trong `MANIFEST.json`.
 3. Chạy installer và mở **Grok Build** từ Start Menu.
 4. Chọn project hoặc bắt đầu một cuộc trò chuyện không có project.
