@@ -1,12 +1,12 @@
-# Grok Build
+# Grok Build Desktop
 
 <p align="center">
   <a href="./README.en.md">🇬🇧 English</a> | <strong>🇻🇳 Tiếng Việt</strong>
 </p>
 
-Grok Build là ứng dụng **agent desktop** chạy trên Electron, sử dụng **Grok CLI chính thức** qua giao thức ACP (`grok agent stdio`). Ứng dụng tập trung vào trải nghiệm trò chuyện, quản lý phiên, duyệt thay đổi mã nguồn, terminal và điều phối công việc; vòng lặp agent, công cụ, xác thực và phiên làm việc vẫn do Grok CLI quản lý.
+Grok Build Desktop là ứng dụng **agent desktop** chạy trên Electron, sử dụng **Grok CLI chính thức** qua giao thức ACP (`grok agent stdio`). Ứng dụng tập trung vào trải nghiệm trò chuyện, quản lý phiên, duyệt thay đổi mã nguồn, terminal và điều phối công việc; vòng lặp agent, công cụ, xác thực và phiên làm việc vẫn do Grok CLI quản lý.
 
-> **CLI là lõi · Desktop là giao diện.** Grok Build không phải bản đổi giao diện của VS Code và không triển khai một agent runtime thứ hai.
+> **CLI là lõi · Desktop là giao diện.** Grok Build Desktop không phải Grok Build IDE, không phải bản đổi giao diện của VS Code, và không triển khai một agent runtime thứ hai.
 
 Phiên bản source hiện tại: **0.5.38** — xem [`product/VERSION`](product/VERSION).
 
@@ -16,22 +16,25 @@ Release được phát hành công khai tại GitHub Releases:
 
 | Gói | Mục đích | Tải xuống |
 |---|---|---|
-| NSIS Setup | Cài vào Windows, tạo Start Menu/shortcut | [Grok-Build-Setup-0.5.38.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/Grok-Build-Setup-0.5.38.exe) |
-| Portable EXE | Chạy dạng file tự giải nén | [Grok-Build-0.5.38-win32-x64-portable.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/Grok-Build-0.5.38-win32-x64-portable.exe) |
-| Portable ZIP | Giải nén một lần, phù hợp dùng lâu dài | [Grok-Build-0.5.38-win32-x64.zip](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/Grok-Build-0.5.38-win32-x64.zip) |
-| Manifest | Kích thước và SHA-256 của artifact | [MANIFEST.json](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/MANIFEST.json) |
+| NSIS Setup | Cài vào Windows, tạo Start Menu/shortcut | [Grok-Build-Setup-0.5.38.exe](https://github.com/nct88/Grok-Build-Desktop/releases/download/v0.5.38/Grok-Build-Setup-0.5.38.exe) |
+| Portable EXE | Chạy dạng file tự giải nén | [Grok-Build-0.5.38-win32-x64-portable.exe](https://github.com/nct88/Grok-Build-Desktop/releases/download/v0.5.38/Grok-Build-0.5.38-win32-x64-portable.exe) |
+| Portable ZIP | Giải nén một lần, phù hợp dùng lâu dài | [Grok-Build-0.5.38-win32-x64.zip](https://github.com/nct88/Grok-Build-Desktop/releases/download/v0.5.38/Grok-Build-0.5.38-win32-x64.zip) |
+| Manifest | Kích thước và SHA-256 của artifact | [MANIFEST.json](https://github.com/nct88/Grok-Build-Desktop/releases/download/v0.5.38/MANIFEST.json) |
 
-Trang phát hành: [Grok Build v0.5.38](https://github.com/nct88/Grok-Build/releases/tag/v0.5.38).
+Trang phát hành: [Grok Build Desktop v0.5.38](https://github.com/nct88/Grok-Build-Desktop/releases/tag/v0.5.38).
 
 Các file Windows hiện chưa được ký Authenticode. SmartScreen có thể cảnh báo trong lần chạy đầu; hãy kiểm tra SHA-256 trong `MANIFEST.json` trước khi mở file.
 
-## Quan hệ giữa các sản phẩm
+## Grok Build Desktop và Grok Build IDE
 
-| Thành phần | Vai trò | Vị trí |
+| Trường | Grok Build Desktop (repo này) | Grok Build IDE |
 |---|---|---|
-| **Grok Build** | Ứng dụng agent desktop chính của repository này | `apps/desktop` |
-| **Grok Build IDE** | Trình soạn thảo Code-OSS tùy chọn, phát hành riêng | Repository `nct88/Grok-Build-IDE` |
-| **Grok CLI** | Agent engine chính thức, bắt buộc để kết nối | `grok` trên `PATH`, `~/.grok/bin/grok.exe` hoặc `GROK_EXECUTABLE` |
+| Tên sản phẩm | **Grok Build Desktop** | **Grok Build IDE** |
+| GitHub | [`nct88/Grok-Build-Desktop`](https://github.com/nct88/Grok-Build-Desktop) | [`nct88/Grok-Build-IDE`](https://github.com/nct88/Grok-Build-IDE) |
+| Nền tảng | Electron, **không** dùng Code-OSS | Code-OSS + Grok Build Workbench |
+| Tên Windows / Start Menu | Grok Build (`Grok Build.exe`) | Grok Build IDE (`Grok Build IDE.exe`) |
+| Vai trò | Giao diện agent, phiên, review, terminal | Editor, Explorer, SCM, debug và agent |
+| Engine bắt buộc | **Grok CLI** (`grok` trên `PATH`, `~/.grok/bin/grok.exe` hoặc `GROK_EXECUTABLE`) | cùng Grok CLI |
 
 ```text
 Grok Build Desktop (Electron)
@@ -132,8 +135,8 @@ ZIP phù hợp hơn portable EXE nếu sử dụng hằng ngày vì không phả
 ## Chạy từ mã nguồn
 
 ```powershell
-git clone https://github.com/nct88/Grok-Build.git
-cd Grok-Build
+git clone https://github.com/nct88/Grok-Build-Desktop.git
+cd Grok-Build-Desktop
 npm install
 npm start
 ```
@@ -249,7 +252,7 @@ dist/<version>/
 ```powershell
 npm run check
 git add -A
-git commit -m "release: Grok Build <semver>"
+git commit -m "release: Grok Build Desktop <semver>"
 git push origin main
 ```
 
@@ -273,7 +276,7 @@ Phát hành công khai chuẩn yêu cầu HTTPS và chữ ký Authenticode hợp
 ## Cấu trúc repository
 
 ```text
-Grok-Build/
+Grok-Build-Desktop/
 ├─ apps/desktop/           Electron main, preload, renderer và packaging
 ├─ packages/acp-client/    ACP client và Node filesystem host
 ├─ packages/sessions/      Chỉ mục phiên Grok cục bộ
@@ -334,6 +337,7 @@ Tính năng video yêu cầu tài khoản cho phép lưu dữ liệu coding (`co
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Ship line và hướng phát triển tiếp theo |
 | [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) | Kênh phát hành, signing và SmartScreen |
 | [`docs/INSTALL_PATHS.md`](docs/INSTALL_PATHS.md) | Đường dẫn cài Desktop/IDE |
+| [`product/PRODUCT_IDENTITY.md`](product/PRODUCT_IDENTITY.md) | Tên sản phẩm Desktop và IDE |
 | [`CHANGELOG.md`](CHANGELOG.md) | Thay đổi theo phiên bản |
 
 ## Đóng góp
@@ -349,4 +353,4 @@ Copyright © 2026 Grok Build contributors. **All rights reserved.** Repository n
 
 Các thành phần bên thứ ba tuân theo giấy phép và thông báo riêng của chúng.
 
-Grok CLI và các model Grok thuộc chủ sở hữu tương ứng trong hệ sinh thái xAI/Grok. Grok Build là giao diện desktop độc lập sử dụng CLI chính thức qua ACP; không tuyên bố liên kết chính thức nếu chưa có xác nhận bằng văn bản.
+Grok CLI và các model Grok thuộc chủ sở hữu tương ứng trong hệ sinh thái xAI/Grok. Grok Build Desktop là giao diện desktop độc lập sử dụng CLI chính thức qua ACP; không tuyên bố liên kết chính thức nếu chưa có xác nhận bằng văn bản.

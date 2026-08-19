@@ -22,7 +22,7 @@ if (!fs.existsSync(stamp)) errors.push("missing stamp-win-icon.cjs");
 else {
   const text = fs.readFileSync(stamp, "utf8");
   if (!text.includes("--set-icon")) errors.push("stamp script must call rcedit --set-icon");
-  for (const marker of ["--set-file-version", "--set-product-version", '"ProductName", "Grok Build"', '"FileDescription", "Grok Build agent desktop"']) {
+  for (const marker of ["--set-file-version", "--set-product-version", '"ProductName", "Grok Build"', '"FileDescription", "Grok Build Desktop"']) {
     if (!text.includes(marker)) errors.push(`stamp script missing metadata marker: ${marker}`);
   }
   if (/Setup|portable/i.test(text) && /afterAllArtifactBuild|artifactPaths/.test(text)) {

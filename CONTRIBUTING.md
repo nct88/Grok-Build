@@ -1,4 +1,8 @@
-# Contributing
+# Contributing to Grok Build Desktop
+
+This repository is **Grok Build Desktop** (`nct88/Grok-Build-Desktop`).
+Grok Build IDE lives in [`nct88/Grok-Build-IDE`](https://github.com/nct88/Grok-Build-IDE).
+The agent engine is the official **Grok CLI**, not a second runtime.
 
 ## Development
 

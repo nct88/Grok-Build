@@ -2,7 +2,7 @@
     "name":  "@grok-build/desktop",
     "version":  "0.5.38",
     "private":  true,
-    "description":  "Grok Build agent desktop — thin Electron shell over grok agent stdio (no VS Code)",
+    "description":  "Grok Build Desktop — thin Electron shell over grok agent stdio (not Grok Build IDE)",
     "main":  "src/main.cjs",
     "type":  "commonjs",
     "author":  "Grok Build",

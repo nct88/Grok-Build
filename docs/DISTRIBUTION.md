@@ -59,7 +59,7 @@ Commit and push the version, release notes and source changes before tagging:
 ```powershell
 npm run check
 git add -A
-git commit -m "release: Grok Build <semver>"
+git commit -m "release: Grok Build Desktop <semver>"
 git push origin main
 ```
 

@@ -1,5 +1,9 @@
 {
-  "product": "Grok Build",
+  "product": "Grok Build Desktop",
+  "githubRepo": "nct88/Grok-Build-Desktop",
+  "siblingProduct": "Grok Build IDE",
+  "siblingRepo": "nct88/Grok-Build-IDE",
+  "windowsProductName": "Grok Build",
   "versionSource": "product/VERSION",
   "tool": "electron-builder",
   "command": "npm run release -- -Version <version>",

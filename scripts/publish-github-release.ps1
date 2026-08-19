@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Publish an already-built Grok Build candidate as an immutable GitHub tag and release.
+  Publish an already-built Grok Build Desktop candidate as an immutable GitHub tag and release.
 
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish-github-release.ps1 -Version 0.5.30 -AllowUnsigned
@@ -212,7 +212,7 @@ if ($DryRun) {
 }
 
 if (-not $localTagCommit) {
-  Invoke-Native "git" @("tag", "-a", $tag, "-m", "Grok Build $Version") | Out-Null
+  Invoke-Native "git" @("tag", "-a", $tag, "-m", "Grok Build Desktop $Version") | Out-Null
 }
 if (-not $remoteTagCommit) {
   Invoke-Native "git" @("push", "origin", $tag) | Out-Null
@@ -226,7 +226,7 @@ $releaseArgs = @(
   $manifestPath,
   "--verify-tag",
   "--target", $head,
-  "--title", "Grok Build $Version",
+  "--title", "Grok Build Desktop $Version",
   "--notes-file", $notesPath,
   "--fail-on-no-commits"
 )

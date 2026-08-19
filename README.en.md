@@ -1,12 +1,12 @@
-# Grok Build
+# Grok Build Desktop
 
 <p align="center">
   <strong>🇬🇧 English</strong> | <a href="./README.md">🇻🇳 Tiếng Việt</a>
 </p>
 
-Grok Build is an Electron **agent desktop** powered by the **official Grok CLI** through ACP (`grok agent stdio`). It focuses on conversations, session management, code review, terminal access and task orchestration, while the agent loop, tools, authentication and sessions remain owned by Grok CLI.
+Grok Build Desktop is an Electron **agent desktop** powered by the **official Grok CLI** through ACP (`grok agent stdio`). It focuses on conversations, session management, code review, terminal access and task orchestration, while the agent loop, tools, authentication and sessions remain owned by Grok CLI.
 
-> **CLI is the core · Desktop is the interface.** Grok Build is not a reskinned VS Code and does not implement a second agent runtime.
+> **CLI is the core · Desktop is the interface.** Grok Build Desktop is not Grok Build IDE, is not a reskinned VS Code, and does not implement a second agent runtime.
 
 Current source version: **0.5.38** — see [`product/VERSION`](product/VERSION).
 
@@ -16,22 +16,25 @@ The release is publicly available on GitHub Releases:
 
 | Package | Purpose | Download |
 |---|---|---|
-| NSIS Setup | Install on Windows with Start Menu and shortcut integration | [Grok-Build-Setup-0.5.38.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/Grok-Build-Setup-0.5.38.exe) |
-| Portable EXE | Run as a self-extracting executable | [Grok-Build-0.5.38-win32-x64-portable.exe](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/Grok-Build-0.5.38-win32-x64-portable.exe) |
-| Portable ZIP | Extract once; recommended for regular use | [Grok-Build-0.5.38-win32-x64.zip](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/Grok-Build-0.5.38-win32-x64.zip) |
-| Manifest | Artifact sizes and SHA-256 values | [MANIFEST.json](https://github.com/nct88/Grok-Build/releases/download/v0.5.38/MANIFEST.json) |
+| NSIS Setup | Install on Windows with Start Menu and shortcut integration | [Grok-Build-Setup-0.5.38.exe](https://github.com/nct88/Grok-Build-Desktop/releases/download/v0.5.38/Grok-Build-Setup-0.5.38.exe) |
+| Portable EXE | Run as a self-extracting executable | [Grok-Build-0.5.38-win32-x64-portable.exe](https://github.com/nct88/Grok-Build-Desktop/releases/download/v0.5.38/Grok-Build-0.5.38-win32-x64-portable.exe) |
+| Portable ZIP | Extract once; recommended for regular use | [Grok-Build-0.5.38-win32-x64.zip](https://github.com/nct88/Grok-Build-Desktop/releases/download/v0.5.38/Grok-Build-0.5.38-win32-x64.zip) |
+| Manifest | Artifact sizes and SHA-256 values | [MANIFEST.json](https://github.com/nct88/Grok-Build-Desktop/releases/download/v0.5.38/MANIFEST.json) |
 
-Release page: [Grok Build v0.5.38](https://github.com/nct88/Grok-Build/releases/tag/v0.5.38).
+Release page: [Grok Build Desktop v0.5.38](https://github.com/nct88/Grok-Build-Desktop/releases/tag/v0.5.38).
 
 Windows artifacts are currently unsigned and may trigger SmartScreen on first run. Verify their SHA-256 values against `MANIFEST.json` before opening them.
 
-## Product relationships
+## Grok Build Desktop and Grok Build IDE
 
-| Component | Role | Location |
+| Field | Grok Build Desktop (this repo) | Grok Build IDE |
 |---|---|---|
-| **Grok Build** | Primary agent desktop application in this repository | `apps/desktop` |
-| **Grok Build IDE** | Optional Code-OSS editor, released separately | Repository `nct88/Grok-Build-IDE` |
-| **Grok CLI** | Required official agent engine | `grok` on `PATH`, `~/.grok/bin/grok.exe`, or `GROK_EXECUTABLE` |
+| Product name | **Grok Build Desktop** | **Grok Build IDE** |
+| GitHub | [`nct88/Grok-Build-Desktop`](https://github.com/nct88/Grok-Build-Desktop) | [`nct88/Grok-Build-IDE`](https://github.com/nct88/Grok-Build-IDE) |
+| Runtime | Electron, **not** Code-OSS | Code-OSS + Grok Build Workbench |
+| Windows / Start Menu name | Grok Build (`Grok Build.exe`) | Grok Build IDE (`Grok Build IDE.exe`) |
+| Role | Agent UI, sessions, review, terminal | Editor, Explorer, SCM, debug, and agent |
+| Required engine | **Grok CLI** (`grok` on `PATH`, `~/.grok/bin/grok.exe`, or `GROK_EXECUTABLE`) | the same Grok CLI |
 
 ```text
 Grok Build Desktop (Electron)
@@ -132,8 +135,8 @@ The ZIP is preferable to the portable EXE for daily use because it does not self
 ## Run from source
 
 ```powershell
-git clone https://github.com/nct88/Grok-Build.git
-cd Grok-Build
+git clone https://github.com/nct88/Grok-Build-Desktop.git
+cd Grok-Build-Desktop
 npm install
 npm start
 ```
@@ -249,7 +252,7 @@ dist/<version>/
 ```powershell
 npm run check
 git add -A
-git commit -m "release: Grok Build <semver>"
+git commit -m "release: Grok Build Desktop <semver>"
 git push origin main
 ```
 
@@ -273,7 +276,7 @@ Standard public releases require HTTPS and valid Authenticode signatures. Unsign
 ## Repository structure
 
 ```text
-Grok-Build/
+Grok-Build-Desktop/
 ├─ apps/desktop/           Electron main, preload, renderer and packaging
 ├─ packages/acp-client/    ACP client and Node filesystem host
 ├─ packages/sessions/      Local Grok session index
@@ -334,6 +337,7 @@ The application checks Settings, `GROK_BUILD_IDE`, default installation paths an
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Ship line and future direction |
 | [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) | Release channels, signing and SmartScreen |
 | [`docs/INSTALL_PATHS.md`](docs/INSTALL_PATHS.md) | Desktop/IDE installation paths |
+| [`product/PRODUCT_IDENTITY.md`](product/PRODUCT_IDENTITY.md) | Desktop and IDE product names |
 | [`CHANGELOG.md`](CHANGELOG.md) | Versioned product changes |
 
 ## Contributing
@@ -349,4 +353,4 @@ Copyright © 2026 Grok Build contributors. **All rights reserved.** This reposit
 
 Third-party components follow their own licenses and notices.
 
-Grok CLI and Grok models belong to their respective owners in the xAI/Grok ecosystem. Grok Build is an independent desktop interface that uses the official CLI through ACP; it does not claim official affiliation without written confirmation.
+Grok CLI and Grok models belong to their respective owners in the xAI/Grok ecosystem. Grok Build Desktop is an independent desktop interface that uses the official CLI through ACP; it does not claim official affiliation without written confirmation.

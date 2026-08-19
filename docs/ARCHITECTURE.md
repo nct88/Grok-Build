@@ -29,7 +29,7 @@ apps/desktop (Electron surface)
 | **Agent loop lives only in `grok` CLI** | Single intelligence source; desktop is a surface |
 | **Renderer never spawns processes / calls model HTTP APIs** | Security + architecture boundary |
 | **Desktop uses ACP stdio via `packages/acp-client`** | No second GrokClient class in desktop |
-| **No Code-OSS tree in this monorepo** | IDE is optional separate product |
+| **No Code-OSS tree in this repository** | Grok Build IDE is a separate product and GitHub repo |
 | **Windows: `signAndEditExecutable: false` + `afterPack` rcedit stamp** | Avoid winCodeSign symlink failures; stamp app exe only |
 
 Enforce with:
@@ -79,5 +79,5 @@ nsis.installerIcon = build/icon.ico
 
 ## Optional IDE
 
-`H:\projects\grok-build-ide` / `%LOCALAPPDATA%\Programs\Grok Build IDE` is a **separate** Code-OSS product.  
-Not a submodule of this monorepo.
+[`nct88/Grok-Build-IDE`](https://github.com/nct88/Grok-Build-IDE) / `%LOCALAPPDATA%\Programs\Grok Build IDE` is a **separate** Code-OSS product.  
+Not a submodule of Grok Build Desktop.

@@ -1,9 +1,9 @@
-# Grok Build — official logo
+# Grok Build Desktop — official logo
 
 | File | Role |
 |------|------|
 | **`fluffy-grok-white-left-source.png`** | Preserved IDE-direction reference — white left / black right |
-| **`fluffy-grok-master.png`** | **Primary Grok Build icon source** — faceless black-left/white-right Fluffy with inverse “grok” |
+| **`fluffy-grok-master.png`** | **Primary Grok Build Desktop icon source** — faceless black-left/white-right Fluffy with inverse “grok” |
 | **`grok-main-logo.png`** | Previous furry Grok tile (fallback) |
 | **`grok-app.png`** | Legacy source (fallback if main missing) |
 | **`processed/`** | **Build-ready** masters after crop + resize |

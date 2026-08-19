@@ -20,7 +20,7 @@ function createProductPaths(homedir = os.homedir()) {
       productName: "Grok Build IDE",
       installDir: path.join(homedir, "AppData", "Local", "Programs", "Grok Build IDE"),
       exeNames: ["Grok Build IDE.exe", "GrokBuildIDE.exe", "Code.exe", "code.exe"],
-      downloadUrl: "https://github.com/",
+      downloadUrl: "https://github.com/nct88/Grok-Build-IDE/releases/latest",
     },
   };
 }

@@ -2,7 +2,7 @@
     "name":  "grok-build",
     "version":  "0.5.38",
     "private":  true,
-    "description":  "Grok Build product monorepo — agent desktop (CLI/ACP) primary; Code-OSS IDE optional",
+    "description":  "Grok Build Desktop — Electron agent app over official Grok CLI (ACP). Not Grok Build IDE.",
     "workspaces":  [
                        "packages/*",
                        "apps/*"
@@ -34,6 +34,14 @@
     "devDependencies":  {
                             "playwright":  "^1.62.1"
                         },
+    "repository":  {
+                       "type":  "git",
+                       "url":  "https://github.com/nct88/Grok-Build-Desktop.git"
+                   },
+    "homepage":  "https://github.com/nct88/Grok-Build-Desktop#readme",
+    "bugs":  {
+                 "url":  "https://github.com/nct88/Grok-Build-Desktop/issues"
+             },
     "engines":  {
                     "node":  "\u003e=20"
                 },

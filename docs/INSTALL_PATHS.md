@@ -1,12 +1,13 @@
-# Grok Build — default install paths (Windows)
+# Grok Build Desktop — default install paths (Windows)
 
-Keep desktop + IDE discovery in sync with `apps/desktop/src/productPaths.cjs` → `PRODUCT_PATHS`.
+Keep Desktop + IDE discovery in sync with `apps/desktop/src/productPaths.cjs` → `PRODUCT_PATHS` and `product/PRODUCT_IDENTITY.md`.
 
-## Grok Build (agent desktop)
+## Grok Build Desktop (agent desktop)
 
 | Item | Value |
 |------|--------|
-| Product name | **Grok Build** |
+| Product full name | **Grok Build Desktop** |
+| Windows product name | **Grok Build** |
 | Default install dir | `%LOCALAPPDATA%\Programs\Grok Build\` |
 | Default executable | `Grok Build.exe` |
 | Alt names | `GrokBuild.exe` |
@@ -43,10 +44,10 @@ C:\Users\<you>\AppData\Local\Programs\Grok Build IDE\Grok Build IDE.exe
 2. If found: **spawn** the exe (not “open folder”), pass current workspace as the first argument.
 3. If not found: show in-app dialog → **Download IDE** (placeholder URL until landing page / GitHub release is set).
 
-### Download URL (demo)
+### Download URL
 
-- Default placeholder: `https://github.com/`
-- Later: set `ideDownloadUrl` in desktop state or ship a constant in `PRODUCT_PATHS.ide.downloadUrl`.
+- Default: `https://github.com/nct88/Grok-Build-IDE/releases/latest`
+- Override: set `ideDownloadUrl` in desktop state.
 
 ## Installer / release notes
 

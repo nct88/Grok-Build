@@ -68,7 +68,7 @@ exports.default = async function afterPack(context) {
     "--set-file-version", version,
     "--set-product-version", version,
     "--set-version-string", "ProductName", "Grok Build",
-    "--set-version-string", "FileDescription", "Grok Build agent desktop",
+    "--set-version-string", "FileDescription", "Grok Build Desktop",
     "--set-version-string", "CompanyName", "Grok Build contributors",
     "--set-version-string", "LegalCopyright", "Copyright (c) 2026 Grok Build contributors. All rights reserved.",
     "--set-version-string", "InternalName", "Grok Build",

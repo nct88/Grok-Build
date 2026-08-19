@@ -22,6 +22,23 @@ if (pkg.version !== version || desktop.version !== version) {
   failures.push(`version mismatch: root=${pkg.version}, desktop=${desktop.version}, product=${version}`);
 }
 if (!changelog.includes(`## ${version}`)) failures.push(`CHANGELOG.md missing ${version}`);
+if (packaging.product !== "Grok Build Desktop") failures.push("packaging.json product must be Grok Build Desktop");
+if (packaging.githubRepo !== "nct88/Grok-Build-Desktop") failures.push("packaging.json githubRepo must be nct88/Grok-Build-Desktop");
+if (packaging.siblingRepo !== "nct88/Grok-Build-IDE") failures.push("packaging.json siblingRepo must be nct88/Grok-Build-IDE");
+if (packaging.windowsProductName !== "Grok Build") failures.push("Windows product name must remain Grok Build");
+if (desktop.build?.productName !== "Grok Build") failures.push("electron-builder productName must remain Grok Build");
+if (!/^# Grok Build Desktop\s*$/m.test(readme) || !/^# Grok Build Desktop\s*$/m.test(readmeEn)) {
+  failures.push("README titles must be Grok Build Desktop");
+}
+if (!/nct88\/Grok-Build-Desktop/.test(readme) || !/nct88\/Grok-Build-Desktop/.test(readmeEn)) {
+  failures.push("README must use the Grok-Build-Desktop GitHub repository");
+}
+if (!/nct88\/Grok-Build-IDE/.test(readme) || !/nct88\/Grok-Build-IDE/.test(readmeEn)) {
+  failures.push("README must identify the sibling Grok Build IDE repository");
+}
+if (/github\.com\/nct88\/Grok-Build(?!-Desktop)(?!-IDE)/.test(readme + readmeEn)) {
+  failures.push("README must not use the retired nct88/Grok-Build GitHub path");
+}
 if (packaging.versionSource !== "product/VERSION") failures.push("packaging.json must use product/VERSION");
 if (packaging.immutableVersions !== true) failures.push("packaging.json must declare immutableVersions");
 if (packaging.license !== "LICENSE") failures.push("packaging.json must identify LICENSE");
@@ -66,7 +83,7 @@ for (const [name, content] of [["Vietnamese README", readme], ["English README",
   if (!content.includes(`/releases/tag/v${version}`)) failures.push(`${name} must link to release v${version}`);
 }
 const releaseAssetPattern = new RegExp(
-  `https://github\\.com/nct88/Grok-Build/releases/download/v${version.replaceAll(".", "\\.")}/[^)\\s]+`,
+  `https://github\\.com/nct88/Grok-Build-Desktop/releases/download/v${version.replaceAll(".", "\\.")}/[^)\\s]+`,
   "g",
 );
 const releaseAssets = (content) => [...new Set(content.match(releaseAssetPattern) || [])].sort();

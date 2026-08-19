@@ -65,7 +65,7 @@ Dev: `scripts/dev-desktop.ps1` · gates: `npm run check`
 - Antigravity cloud: Sites, PR inbox, scheduled cloud tasks
 - VS Code marketplace / full debug IDE (use Open IDE → grok-build-ide)
 - Agent loop reimplementation inside Electron
-- Embedding full Code-OSS in this monorepo
+- Embedding full Code-OSS in this Desktop repository
 
 ### Update feed format
 

@@ -6726,7 +6726,7 @@
       dl.dataset.url =
         res?.downloadUrl ||
         bootstrap?.ideInstall?.downloadUrl ||
-        "https://github.com/";
+        "https://github.com/nct88/Grok-Build-IDE/releases/latest";
     }
     modal.classList.remove("hidden");
   }
@@ -6769,7 +6769,7 @@
       const url =
         $("btnIdeDownload")?.dataset?.url ||
         bootstrap?.ideInstall?.downloadUrl ||
-        "https://github.com/";
+        "https://github.com/nct88/Grok-Build-IDE/releases/latest";
       void api.openExternal?.(url);
       closeIdeModal();
     });

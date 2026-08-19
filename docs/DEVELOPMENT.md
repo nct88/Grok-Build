@@ -10,8 +10,8 @@
 ## Run from source
 
 ```powershell
-git clone https://github.com/nct88/Grok-Build.git
-cd Grok-Build
+git clone https://github.com/nct88/Grok-Build-Desktop.git
+cd Grok-Build-Desktop
 npm install
 npm start
 ```
