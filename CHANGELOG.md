@@ -2,6 +2,12 @@
 
 Public, versioned changes for Grok Build Desktop.
 
+## 0.5.39 — 2026-08-20
+
+- Added workspace Grok skills (`/verify-ui`, `/use-mcp`, `/write-fix-log`, `/run-check`), always-on `.grok/rules`, and Chrome DevTools MCP so Desktop sessions know how to verify UI and call integrations.
+
+Release details are maintained in `docs/releases/0.5.39.md`.
+
 ## 0.5.38 — 2026-08-18
 
 - Aligned Desktop with Grok CLI 1.0.5: ACP `session/new` and `session/load` now send reasoning effort, and resume surfaces last-turn / recap summaries.

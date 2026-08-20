@@ -1,0 +1,9 @@
+# Project-scoped MCP for Grok Build Desktop.
+# Same-named user servers are replaced, not merged.
+# Figma, Canva, Cloudflare, MongoDB Atlas, Supabase stay on user plugins.
+
+[mcp_servers.chrome-devtools]
+command = "npx"
+args = ["-y", "chrome-devtools-mcp@latest"]
+enabled = true
+startup_timeout_sec = 60
